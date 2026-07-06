@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.142" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MVVMLibrary\MVVMLibrary.csproj" />
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
+  </ItemGroup>
+	<PropertyGroup>
+		<ProjectStartDate>2026-05-23</ProjectStartDate>
+	</PropertyGroup>
+
+	<Target Name="CalculateBuildVersion" BeforeTargets="GetAssemblyVersion">
+		<PropertyGroup>
+			<BuildNumber>$([System.DateTime]::Now.Subtract($([System.DateTime]::Parse('$(ProjectStartDate)'))).Days)</BuildNumber>
+			<RevisionNumber>$([System.DateTime]::Now.Hour)$([System.DateTime]::Now.Minute)</RevisionNumber>
+			<Version>0.1.$(BuildNumber).$(RevisionNumber)</Version>
+			<AssemblyVersion>0.1.$(BuildNumber).$(RevisionNumber)</AssemblyVersion>
+			<FileVersion>0.1.$(BuildNumber).$(RevisionNumber)</FileVersion>
+			<InformationalVersion>0.1.$(BuildNumber).$(RevisionNumber)</InformationalVersion>
+		</PropertyGroup>
+
+		<Message Text="Calculated build version: $(Version)" Importance="High" />
+	</Target>
+</Project>

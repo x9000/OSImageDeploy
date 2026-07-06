@@ -1,0 +1,68 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UserSecretsId>c79ce1e4-decc-4d27-857b-8c950c011231</UserSecretsId>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>OSImageDeploy.ico</ApplicationIcon>
+    <SignAssembly>False</SignAssembly>
+    <DelaySign>False</DelaySign>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="OSImageDeploy.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="6.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MVVMLibrary\MVVMLibrary.csproj" />
+    <ProjectReference Include="..\Utilities\Utilities.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="DellPEDrivers.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="HPPEDrivers.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+	<PropertyGroup>
+		<ProjectStartDate>2026-05-23</ProjectStartDate>
+	</PropertyGroup>
+
+	<Target Name="CalculateBuildVersion" BeforeTargets="GetAssemblyVersion">
+		<PropertyGroup>
+			<BuildNumber>$([System.DateTime]::Now.Subtract($([System.DateTime]::Parse('$(ProjectStartDate)'))).Days)</BuildNumber>
+			<RevisionNumber>$([System.DateTime]::Now.Hour)$([System.DateTime]::Now.Minute)</RevisionNumber>
+			<Version>0.1.$(BuildNumber).$(RevisionNumber)</Version>
+			<AssemblyVersion>0.1.$(BuildNumber).$(RevisionNumber)</AssemblyVersion>
+			<FileVersion>0.1.$(BuildNumber).$(RevisionNumber)</FileVersion>
+			<InformationalVersion>0.1.$(BuildNumber).$(RevisionNumber)</InformationalVersion>
+		</PropertyGroup>
+
+		<Message Text="Calculated build version: $(Version)" Importance="High" />
+	</Target>
+
+</Project>

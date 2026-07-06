@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="MVVMLibrary/MVVMLibrary.csproj" Id="4f7e0eb9-b78c-40b1-94d0-629718528991" />
+  <Project Path="OSImageDeploy/OSImageDeploy.csproj" />
+  <Project Path="OSImageDeployClient/OSImageDeployClient.csproj" Id="0687d123-8ba2-42b2-9d29-7f00a7070eaa" />
+  <Project Path="OSImageDeploySuite/OSImageDeploySuite.vdproj" Type="Installer">
+    <Build />
+  </Project>
+  <Project Path="Utilities/Utilities.csproj" Id="aff07a84-32f7-410b-b14f-ca310246c2eb" />
+</Solution>
