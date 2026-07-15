@@ -69,40 +69,30 @@
 		<CodeSigningCertificateThumbprint>F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907</CodeSigningCertificateThumbprint>
 	</PropertyGroup>
 
-	<Target Name="SignBuildOutput"
-			AfterTargets="Build"
-			Condition="'$(Configuration)' == 'Release'">
+	<Target Name="SignBuildOutput" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
 
 		<ItemGroup>
 			<FilesToSign Include="$(TargetPath)" />
 
-			<FilesToSign Include="$(TargetDir)$(AssemblyName).exe"
-						 Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
+			<FilesToSign Include="$(TargetDir)$(AssemblyName).exe" Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
 
-			<FilesToSign Include="$(TargetDir)MVVMLibrary.dll"
-						 Condition="Exists('$(TargetDir)MVVMLibrary.dll')" />
+			<FilesToSign Include="$(TargetDir)MVVMLibrary.dll" Condition="Exists('$(TargetDir)MVVMLibrary.dll')" />
 
-			<FilesToSign Include="$(TargetDir)OSImageDeploy.dll"
-						 Condition="Exists('$(TargetDir)OSImageDeploy.dll')" />
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.dll" Condition="Exists('$(TargetDir)OSImageDeploy.dll')" />
 			
-			<FilesToSign Include="$(TargetDir)Utilities.dll"
-						 Condition="Exists('$(TargetDir)Utilities.dll')" />
+			<FilesToSign Include="$(TargetDir)Utilities.dll" Condition="Exists('$(TargetDir)Utilities.dll')" />
 		</ItemGroup>
 
 		<Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(SolutionDir)Build\Sign-File.ps1&quot; -FilePath &quot;%(FilesToSign.FullPath)&quot; -CertificateThumbprint &quot;$(CodeSigningCertificateThumbprint)&quot;" />
 
 	</Target>
 
-	<Target Name="SignPublishOutput"
-        AfterTargets="Publish"
-        Condition="'$(Configuration)' == 'Release'">
+	<Target Name="SignPublishOutput" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release'">
 
 		<ItemGroup>
-			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).dll"
-								  Condition="Exists('$(PublishDir)$(AssemblyName).dll')" />
+			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).dll" Condition="Exists('$(PublishDir)$(AssemblyName).dll')" />
 
-			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).exe"
-								  Condition="Exists('$(PublishDir)$(AssemblyName).exe')" />
+			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).exe" Condition="Exists('$(PublishDir)$(AssemblyName).exe')" />
 		</ItemGroup>
 
 		<Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(SolutionDir)Build\Sign-File.ps1&quot; -FilePath &quot;%(PublishedFilesToSign.FullPath)&quot; -CertificateThumbprint &quot;$(CodeSigningCertificateThumbprint)&quot;" />

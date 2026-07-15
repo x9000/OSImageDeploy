@@ -112,7 +112,7 @@ namespace Utilities
 			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\DriverPacks");
 			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\WindowsImages");
 
-			String winPeMediaFolder = await BuildWinPeMediaAsync();
+			WinPeBuildResult winPeBuildResult =	await BuildWinPeMediaAsync();
 
 			OnProgress(
 				"Preparing Disk",
@@ -120,7 +120,7 @@ namespace Utilities
 				percent: 85);
 
 			FSManager.CopyDirectory(
-				winPeMediaFolder,
+				winPeBuildResult.MediaFolder,
 				$"{winPEPartitionDriveLetter}:\\");
 
 			OnProgress(
@@ -130,7 +130,7 @@ namespace Utilities
 
 		}
 
-		private async Task<String> BuildWinPeMediaAsync()
+		private async Task<WinPeBuildResult> BuildWinPeMediaAsync()
 		{
 			OnProgress(
 				"Preparing Disk",
@@ -327,7 +327,15 @@ namespace Utilities
 				"Dismounted WIM image",
 				percent: 85);
 
-			return mediaFolder;
+			return new WinPeBuildResult
+			{
+				WorkingFolder = workingFolder,
+				MediaFolder = mediaFolder,
+				DriverFolder = driverFolder,
+				MountFolder = mountFolder,
+				BootWimPath = bootWimPath,
+				WasLoadedFromCache = false
+			};
 		}
 
 		private void Service_ProgressChanged(object sender, WimOperationProgressEventArgs e)
