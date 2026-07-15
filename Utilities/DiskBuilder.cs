@@ -112,70 +112,222 @@ namespace Utilities
 			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\DriverPacks");
 			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\WindowsImages");
 
-			OnProgress("Preparing Disk", $"Preparing WINPE environment from ADK.", percent: 22);
-			String winPEInstallFolder = "";
+			String winPeMediaFolder = await BuildWinPeMediaAsync();
 
-			String[] possibleADKLocations = new string[] {Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), @"Windows Kits\10\Assessment and Deployment Kit"),
-			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Windows Kits\10\Assessment and Deployment Kit")};
-			foreach (string root in possibleADKLocations)
+			OnProgress(
+				"Preparing Disk",
+				"Copying WinPE environment to USB drive.",
+				percent: 85);
+
+			FSManager.CopyDirectory(
+				winPeMediaFolder,
+				$"{winPEPartitionDriveLetter}:\\");
+
+			OnProgress(
+				"Preparing Disk",
+				"USB Build Complete.",
+				percent: 100);
+
+		}
+
+		private async Task<String> BuildWinPeMediaAsync()
+		{
+			OnProgress(
+				"Preparing Disk",
+				"Preparing WinPE environment from ADK.",
+				percent: 22);
+
+			String winPeInstallFolder = "";
+
+			String[] possibleAdkLocations = new String[]
 			{
-				string path = Path.Combine(root, "Windows Preinstallation Environment");
+		Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+			@"Windows Kits\10\Assessment and Deployment Kit"),
+
+		Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+			@"Windows Kits\10\Assessment and Deployment Kit")
+			};
+
+			foreach (String root in possibleAdkLocations)
+			{
+				String path = Path.Combine(
+					root,
+					"Windows Preinstallation Environment");
+
 				if (Directory.Exists(path))
 				{
-					winPEInstallFolder = path;
+					winPeInstallFolder = path;
+					break;
 				}
 			}
-			String workingFolder = Path.Combine(Path.GetTempPath(), $"WinPEBuild_{Guid.NewGuid()}");
+
+			if (String.IsNullOrWhiteSpace(winPeInstallFolder))
+			{
+				throw new DirectoryNotFoundException(
+					"The Windows ADK WinPE installation folder could not be found.");
+			}
+
+			String workingFolder = Path.Combine(
+				Path.GetTempPath(),
+				$"WinPEBuild_{Guid.NewGuid()}");
+
+			String mediaFolder = Path.Combine(workingFolder, "media");
+			String sourcesFolder = Path.Combine(mediaFolder, "Sources");
+			String driverFolder = Path.Combine(workingFolder, "pedrivers");
+			String mountFolder = Path.Combine(workingFolder, "mount");
+
 			Directory.CreateDirectory(workingFolder);
-			Directory.CreateDirectory(Path.Combine(workingFolder, "media"));
-			Directory.CreateDirectory(Path.Combine(workingFolder, @"media\Sources"));
-			Directory.CreateDirectory(Path.Combine(workingFolder, "pedrivers"));
-			Directory.CreateDirectory(Path.Combine(workingFolder, "mount"));
-			FSManager.CopyDirectory(Path.Combine(winPEInstallFolder, @"amd64\Media"), Path.Combine($"{workingFolder}\\media"));
-			File.Copy(Path.Combine(winPEInstallFolder, @"amd64\en-us\winpe.wim"), Path.Combine(workingFolder, @"media\Sources\Boot.wim"));
-			OnProgress("Preparing Disk", $"Mounting Boot.wim file.", percent: 25);
+			Directory.CreateDirectory(mediaFolder);
+			Directory.CreateDirectory(sourcesFolder);
+			Directory.CreateDirectory(driverFolder);
+			Directory.CreateDirectory(mountFolder);
+
+			String adkMediaFolder = Path.Combine(
+				winPeInstallFolder,
+				@"amd64\Media");
+
+			String sourceWimPath = Path.Combine(
+				winPeInstallFolder,
+				@"amd64\en-us\winpe.wim");
+
+			String bootWimPath = Path.Combine(
+				sourcesFolder,
+				"Boot.wim");
+
+			FSManager.CopyDirectory(
+				adkMediaFolder,
+				mediaFolder);
+
+			File.Copy(
+				sourceWimPath,
+				bootWimPath);
+
+			OnProgress(
+				"Preparing Disk",
+				"Mounting Boot.wim file.",
+				percent: 25);
 
 			using WimImageService service = new WimImageService();
+
+			service.ProgressChanged += Service_ProgressChanged;
+
+			await using WimServicingSession wimSession =
+				await service.MountForServicingAsync(
+					bootWimPath,
+					1,
+					mountFolder);
+
+			ZipFile.ExtractToDirectory(
+				Path.Combine(
+					AppContext.BaseDirectory,
+					"DellPEDrivers.zip"),
+				driverFolder);
+
+			ZipFile.ExtractToDirectory(
+				Path.Combine(
+					AppContext.BaseDirectory,
+					"HPPEDrivers.zip"),
+				driverFolder);
+
+			String[] packages = new String[]
 			{
-				service.ProgressChanged += Service_ProgressChanged;
+		"WinPE-NetFX.cab",
+		"WinPE-PowerShell.cab",
+		"WinPE-WMI.cab",
+		"WinPE-Scripting.cab",
+		"WinPE-DismCmdlets.cab",
+		"WinPE-StorageWMI.cab",
+		"WinPE-HSP-Driver.cab",
+		"WinPE-SecureStartup.cab",
+		"WinPE-EnhancedStorage.cab",
+		"WinPE-FMAPI.cab",
+		"WinPE-PlatformId.cab"
+			};
 
-				await using WimServicingSession wimSession = await service.MountForServicingAsync(Path.Combine(workingFolder, @"media\Sources\Boot.wim"), 1, Path.Combine(workingFolder, @"mount"));
-				{
+			for (Int32 packageIndex = 0;
+				packageIndex < packages.Length;
+				packageIndex++)
+			{
+				String package = packages[packageIndex];
 
-					ZipFile.ExtractToDirectory(Path.Combine(AppContext.BaseDirectory, "DellPEDrivers.zip"), Path.Join(workingFolder, "pedrivers"));
-					ZipFile.ExtractToDirectory(Path.Combine(AppContext.BaseDirectory, "HPPEDrivers.zip"), Path.Join(workingFolder, "pedrivers"));
+				OnProgress(
+					"Preparing Disk",
+					$"Adding packages to WinPE ({package})",
+					percent: 26 + packageIndex);
 
-					String[] packages = new String[] { "WinPE-NetFX.cab", "WinPE-PowerShell.cab", "WinPE-WMI.cab", "WinPE-Scripting.cab", "WinPE-DismCmdlets.cab", "WinPE-StorageWMI.cab", "WinPE-HSP-Driver.cab", "WinPE-SecureStartup.cab", "WinPE-EnhancedStorage.cab", "WinPE-FMAPI.cab", "WinPE-PlatformId.cab" };
-					foreach (String package in packages)
-					{
-						OnProgress("Preparing Disk", $"Adding packages to WinPE ({package})", percent: (26 + packages.IndexOf(package)));
-						wimSession.AddPackage(Path.Join(Path.Join(winPEInstallFolder, @"amd64\WinPE_OCs"), package));
-					}
+				String packagePath = Path.Combine(
+					winPeInstallFolder,
+					@"amd64\WinPE_OCs",
+					package);
 
-					//Copy client app to WINPE
-					if (Directory.Exists(Path.Combine(AppContext.BaseDirectory, "WinPEClient")))
-					{
-						FSManager.CopyDirectory(Path.Combine(AppContext.BaseDirectory, "WinPEClient"), Path.Combine(workingFolder, @"mount\WinPEClient"));
-					}
-					else
-					{
-						FSManager.CopyDirectory(@"C:\Users\PaulPrior\OneDrive - x9000.com\_Repository\VSProjects\2026\OSImageDeploy\OSImageDeployClient\bin\Release\net10.0-windows\publish\win-x64", Path.Combine(workingFolder, @"mount\WinPEClient"));
-					}
-
-					//File.WriteAllLines(Path.Combine(workingFolder, @"mount\Windows\System32\WinPEShl.ini"), new String[] { "[LaunchApp]", @"AppPath = \WinPEClient\OSImageDeployClient.exe" });
-					File.WriteAllLines(Path.Combine(workingFolder, @"mount\Windows\System32\startnet.cmd"), new String[] { "@echo off", "echo Initialising environment.", "wpeinit", "echo Starting imaging tool.", @"\WinPEClient\OSImageDeployClient.exe", "Exit" });
-
-					OnProgress("Preparing Disk", $"Adding drivers", percent: 50);
-					wimSession.AddDriver(Path.Combine(workingFolder, "pedrivers"), true, false);
-
-
-					OnProgress("Preparing Disk", $"Dismounting WIM image", percent: 60);
-					await wimSession.UnmountAsync(commit: true);
-				}
+				wimSession.AddPackage(packagePath);
 			}
-			OnProgress("Preparing Disk", $"Dismounted WIM image", percent: 85);
-			FSManager.CopyDirectory(Path.Join(workingFolder,"media"), $"{winPEPartitionDriveLetter}:\\");
-			OnProgress("Preparing Disk", $"USB Build Complete.", percent: 100);
+
+			String packagedWinPeClientFolder = Path.Combine(
+				AppContext.BaseDirectory,
+				"WinPEClient");
+
+			String destinationWinPeClientFolder = Path.Combine(
+				mountFolder,
+				"WinPEClient");
+
+			if (Directory.Exists(packagedWinPeClientFolder))
+			{
+				FSManager.CopyDirectory(
+					packagedWinPeClientFolder,
+					destinationWinPeClientFolder);
+			}
+			else
+			{
+				String developmentWinPeClientFolder =
+					@"C:\Users\PaulPrior\OneDrive - x9000.com\_Repository\VSProjects\2026\OSImageDeploy\OSImageDeployClient\bin\Release\net10.0-windows\publish\win-x64";
+
+				FSManager.CopyDirectory(
+					developmentWinPeClientFolder,
+					destinationWinPeClientFolder);
+			}
+
+			String startNetPath = Path.Combine(
+				mountFolder,
+				@"Windows\System32\startnet.cmd");
+
+			File.WriteAllLines(
+				startNetPath,
+				new String[]
+				{
+			"@echo off",
+			"echo Initialising environment.",
+			"wpeinit",
+			"echo Starting imaging tool.",
+			@"\WinPEClient\OSImageDeployClient.exe",
+			"Exit"
+				});
+
+			OnProgress(
+				"Preparing Disk",
+				"Adding drivers",
+				percent: 50);
+
+			wimSession.AddDriver(
+				driverFolder,
+				true,
+				false);
+
+			OnProgress(
+				"Preparing Disk",
+				"Dismounting WIM image",
+				percent: 60);
+
+			await wimSession.UnmountAsync(commit: true);
+
+			OnProgress(
+				"Preparing Disk",
+				"Dismounted WIM image",
+				percent: 85);
+
+			return mediaFolder;
 		}
 
 		private void Service_ProgressChanged(object sender, WimOperationProgressEventArgs e)
