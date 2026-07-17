@@ -493,21 +493,30 @@ namespace Utilities
 				WasLoadedFromCache = false
 			};
 		}
+		private static async Task<String> CalculateDriverPackageHashAsync()
+		{
+			String[] files =
+			{
+				Path.Combine(AppContext.BaseDirectory, "DellPEDrivers.zip"),
+				Path.Combine(AppContext.BaseDirectory, "HPPEDrivers.zip")
+			};
+			return await CalculateFilesHashAsync(files);
+		}
 
 		private async Task<WinPeCacheManifest>BuildWinPeCacheManifestAsync(WinPeEnvironment environment)
 		{
 			String applicationVersion =
 				Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "";
 
-			await Task.CompletedTask;
-
+			String winPeClientHash = await CalculateDirectoryHashAsync(GetWinPeClientSourceFolder());
+			String driverPackagesHash = await CalculateDriverPackageHashAsync();
 			return new WinPeCacheManifest
 			{
 				ApplicationVersion = applicationVersion,
 				AdkVersion = environment.Version,
 				Architecture = environment.Architecture,
-				WinPeClientHash = "",
-				DriverPackagesHash = "",
+				WinPeClientHash = winPeClientHash,
+				DriverPackagesHash = driverPackagesHash,
 				PackageConfigurationHash = ""
 			};
 		}
