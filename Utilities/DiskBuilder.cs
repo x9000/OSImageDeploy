@@ -313,43 +313,14 @@ namespace Utilities
 		private async Task<WinPeBuildResult> BuildWinPeMediaAsync()
 		{
 
-			String winPeInstallFolder = "";
-
-			String[] possibleAdkLocations = new String[]
-			{
-		Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-			@"Windows Kits\10\Assessment and Deployment Kit"),
-
-		Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-			@"Windows Kits\10\Assessment and Deployment Kit")
-			};
-
-			foreach (String root in possibleAdkLocations)
-			{
-				String path = Path.Combine(
-					root,
-					"Windows Preinstallation Environment");
-
-				if (Directory.Exists(path))
-				{
-					winPeInstallFolder = path;
-					break;
-				}
-			}
-
-			if (String.IsNullOrWhiteSpace(winPeInstallFolder))
-			{
-				throw new DirectoryNotFoundException(
-					"The Windows ADK WinPE installation folder could not be found.");
-			}
+			WinPeEnvironment environment =
+				WinPeEnvironment.Discover();
 
 			WinPeMediaCacheManager cacheManager = new WinPeMediaCacheManager();
 
 			WinPeCacheManifest expectedManifest =
 				await BuildWinPeCacheManifestAsync(
-					winPeInstallFolder);
+					environment);
 
 			if (await cacheManager.IsValidAsync(expectedManifest))
 			{
@@ -402,13 +373,9 @@ namespace Utilities
 			Directory.CreateDirectory(driverFolder);
 			Directory.CreateDirectory(mountFolder);
 
-			String adkMediaFolder = Path.Combine(
-				winPeInstallFolder,
-				@"amd64\Media");
+			String adkMediaFolder =	environment.MediaFolder;
 
-			String sourceWimPath = Path.Combine(
-				winPeInstallFolder,
-				@"amd64\en-us\winpe.wim");
+			String sourceWimPath =	environment.SourceBootWim;
 
 			String bootWimPath = Path.Combine(
 				sourcesFolder,
@@ -460,10 +427,7 @@ namespace Utilities
 
 				OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	$"Adding package {packageIndex + 1} of {packages.Length}: {package}", packageProgress);
 
-				String packagePath = Path.Combine(
-					winPeInstallFolder,
-					@"amd64\WinPE_OCs",
-					package);
+				String packagePath = Path.Combine(environment.OptionalComponentsFolder,	package);
 
 				wimSession.AddPackage(packagePath);
 			}
@@ -530,8 +494,7 @@ namespace Utilities
 			};
 		}
 
-		private async Task<WinPeCacheManifest> BuildWinPeCacheManifestAsync(
-			String winPeInstallFolder)
+		private async Task<WinPeCacheManifest>BuildWinPeCacheManifestAsync(WinPeEnvironment environment)
 		{
 			String applicationVersion =
 				Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "";
@@ -541,8 +504,8 @@ namespace Utilities
 			return new WinPeCacheManifest
 			{
 				ApplicationVersion = applicationVersion,
-				AdkVersion = "",
-				Architecture = "amd64",
+				AdkVersion = environment.Version,
+				Architecture = environment.Architecture,
 				WinPeClientHash = "",
 				DriverPackagesHash = "",
 				PackageConfigurationHash = ""
@@ -592,18 +555,6 @@ namespace Utilities
 			throw new DirectoryNotFoundException(
 				"The WinPEClient source folder could not be found. " +
 				"Set OSIMAGEDEPLOY_WINPECLIENT_PATH for development builds.");
-		}
-
-		private static String GetAdkVersion(
-			String winPeInstallFolder)
-		{
-			DirectoryInfo directoryInfo =
-				new DirectoryInfo(winPeInstallFolder);
-
-			DirectoryInfo adkDirectory =
-				directoryInfo.Parent;
-
-			return adkDirectory?.LastWriteTimeUtc.ToString("O") ?? "";
 		}
 
 		private static async Task<String> CalculateDirectoryHashAsync(
