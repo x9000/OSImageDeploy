@@ -2,6 +2,7 @@
 using System.Configuration;
 using System.Data;
 using System.Windows;
+using Utilities;
 
 namespace OSImageDeploy
 {
@@ -12,8 +13,9 @@ namespace OSImageDeploy
 	{
 		protected override void OnStartup(StartupEventArgs e)
 		{
+			AppLog.Initialize();
 			base.OnStartup(e);
-			if(Environment.SystemDirectory.StartsWith("X:", StringComparison.OrdinalIgnoreCase))
+			if (Environment.SystemDirectory.StartsWith("X:", StringComparison.OrdinalIgnoreCase))
 			{
 				//Launch Restore page
 			}

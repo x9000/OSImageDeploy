@@ -2,6 +2,7 @@
 using Imaging;
 using Microsoft.Management.Infrastructure;
 using Microsoft.Win32;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -312,7 +313,7 @@ namespace Utilities
 
 		private async Task<WinPeBuildResult> BuildWinPeMediaAsync()
 		{
-
+			Stopwatch stopwatch = Stopwatch.StartNew();
 			WinPeEnvironment environment =
 				WinPeEnvironment.Discover();
 
