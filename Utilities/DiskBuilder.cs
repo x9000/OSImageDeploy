@@ -503,6 +503,26 @@ namespace Utilities
 			return await CalculateFilesHashAsync(files);
 		}
 
+		private static async Task<String> CalculatePackageConfigurationHashAsync()
+		{
+			String packageList =
+				String.Join(
+					Environment.NewLine,
+					GetWinPePackages());
+
+			return await CalculateStringHashAsync(packageList);
+		}
+
+		private static async Task<string> CalculateStringHashAsync(string packageList)
+		{
+			return packageList is null ? "" : await Task.Run(() =>
+			{
+				Byte[] bytes = Encoding.UTF8.GetBytes(packageList);
+				Byte[] hash = SHA256.HashData(bytes);
+				return Convert.ToHexString(hash);
+			});
+		}
+
 		private async Task<WinPeCacheManifest>BuildWinPeCacheManifestAsync(WinPeEnvironment environment)
 		{
 			String applicationVersion =
@@ -510,6 +530,7 @@ namespace Utilities
 
 			String winPeClientHash = await CalculateDirectoryHashAsync(GetWinPeClientSourceFolder());
 			String driverPackagesHash = await CalculateDriverPackageHashAsync();
+			String packageConfigurationHash = await CalculatePackageConfigurationHashAsync();
 			return new WinPeCacheManifest
 			{
 				ApplicationVersion = applicationVersion,
@@ -517,7 +538,7 @@ namespace Utilities
 				Architecture = environment.Architecture,
 				WinPeClientHash = winPeClientHash,
 				DriverPackagesHash = driverPackagesHash,
-				PackageConfigurationHash = ""
+				PackageConfigurationHash = packageConfigurationHash
 			};
 		}
 
@@ -525,17 +546,17 @@ namespace Utilities
 		{
 			return new String[]
 			{
-		"WinPE-NetFX.cab",
-		"WinPE-PowerShell.cab",
-		"WinPE-WMI.cab",
-		"WinPE-Scripting.cab",
-		"WinPE-DismCmdlets.cab",
-		"WinPE-StorageWMI.cab",
-		"WinPE-HSP-Driver.cab",
-		"WinPE-SecureStartup.cab",
-		"WinPE-EnhancedStorage.cab",
-		"WinPE-FMAPI.cab",
-		"WinPE-PlatformId.cab"
+				"WinPE-NetFX.cab",
+				"WinPE-PowerShell.cab",
+				"WinPE-WMI.cab",
+				"WinPE-Scripting.cab",
+				"WinPE-DismCmdlets.cab",
+				"WinPE-StorageWMI.cab",
+				"WinPE-HSP-Driver.cab",
+				"WinPE-SecureStartup.cab",
+				"WinPE-EnhancedStorage.cab",
+				"WinPE-FMAPI.cab",
+				"WinPE-PlatformId.cab"
 			};
 		}
 

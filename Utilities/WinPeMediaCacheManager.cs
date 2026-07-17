@@ -276,11 +276,6 @@ namespace Utilities
 				cachedManifest.SchemaVersion == CurrentSchemaVersion &&
 
 				String.Equals(
-					cachedManifest.ApplicationVersion,
-					expectedManifest.ApplicationVersion,
-					StringComparison.OrdinalIgnoreCase) &&
-
-				String.Equals(
 					cachedManifest.AdkVersion,
 					expectedManifest.AdkVersion,
 					StringComparison.OrdinalIgnoreCase) &&
