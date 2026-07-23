@@ -1,6 +1,7 @@
 ﻿#nullable disable
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -69,8 +70,22 @@ namespace Utilities
 				throw new ArgumentNullException(nameof(expectedManifest));
 			}
 
-			if (!CacheExists)
+			AppLog.Information(
+				$"Checking WinPE media cache in '{CacheDirectory}'.");
+
+			if (!File.Exists(ArchivePath))
 			{
+				AppLog.Information(
+					"WinPE media cache miss: the archive does not exist.");
+
+				return false;
+			}
+
+			if (!File.Exists(ManifestPath))
+			{
+				AppLog.Information(
+					"WinPE media cache miss: the manifest does not exist.");
+
 				return false;
 			}
 
@@ -81,13 +96,20 @@ namespace Utilities
 
 				if (cachedManifest == null)
 				{
+					AppLog.Warning(
+						"WinPE media cache miss: the manifest is empty.");
+
 					return false;
 				}
 
-				if (!ManifestMatches(
+				if (!TryGetManifestMismatchReason(
 					cachedManifest,
-					expectedManifest))
+					expectedManifest,
+					out String mismatchReason))
 				{
+					AppLog.Information(
+						$"WinPE media cache miss: {mismatchReason}");
+
 					return false;
 				}
 
@@ -100,15 +122,34 @@ namespace Utilities
 					cachedManifest.ArchiveHash,
 					StringComparison.OrdinalIgnoreCase))
 				{
+					AppLog.Warning(
+						"WinPE media cache miss: the archive hash does not match the manifest.");
+
 					return false;
 				}
 
-				return await Task.Run(
+				Boolean archiveIsValid = await Task.Run(
 					() => ValidateArchiveContents(),
 					cancellationToken);
+
+				AppLog.Information(
+					"WinPE media cache hit: the manifest and archive are valid.");
+
+				return archiveIsValid;
 			}
-			catch
+			catch (OperationCanceledException)
 			{
+				AppLog.Information(
+					"WinPE media cache validation was cancelled.");
+
+				throw;
+			}
+			catch (Exception exception)
+			{
+				AppLog.Error(
+					"WinPE media cache validation failed. The cache will be rebuilt.",
+					exception);
+
 				return false;
 			}
 		}
@@ -135,6 +176,11 @@ namespace Utilities
 			{
 				throw new ArgumentNullException(nameof(manifest));
 			}
+
+			Stopwatch stopwatch = Stopwatch.StartNew();
+
+			AppLog.Information(
+				$"Creating WinPE media cache from '{mediaDirectory}'.");
 
 			Directory.CreateDirectory(CacheDirectory);
 
@@ -192,11 +238,40 @@ namespace Utilities
 					temporaryManifestPath,
 					ManifestPath,
 					overwrite: true);
+
+				stopwatch.Stop();
+
+				Int64 archiveSizeBytes =
+					new FileInfo(ArchivePath).Length;
+
+				AppLog.Information(
+					$"WinPE media cache created in {stopwatch.Elapsed.TotalSeconds:F1} seconds " +
+					$"({archiveSizeBytes / 1024D / 1024D:F1} MB).");
 			}
-			catch
+			catch (OperationCanceledException)
 			{
+				stopwatch.Stop();
+
 				DeleteFileIfPresent(temporaryArchivePath);
 				DeleteFileIfPresent(temporaryManifestPath);
+
+				AppLog.Warning(
+					$"WinPE media cache creation was cancelled after " +
+					$"{stopwatch.Elapsed.TotalSeconds:F1} seconds.");
+
+				throw;
+			}
+			catch (Exception exception)
+			{
+				stopwatch.Stop();
+
+				DeleteFileIfPresent(temporaryArchivePath);
+				DeleteFileIfPresent(temporaryManifestPath);
+
+				AppLog.Error(
+					$"WinPE media cache creation failed after " +
+					$"{stopwatch.Elapsed.TotalSeconds:F1} seconds.",
+					exception);
 
 				throw;
 			}
@@ -220,21 +295,56 @@ namespace Utilities
 					ArchivePath);
 			}
 
-			await Task.Run(
-				() =>
-				{
-					cancellationToken.ThrowIfCancellationRequested();
+			Stopwatch stopwatch = Stopwatch.StartNew();
 
-					ValidateArchiveContents();
+			AppLog.Information(
+				$"Restoring WinPE media cache to '{destinationDirectory}'.");
 
-					Directory.CreateDirectory(destinationDirectory);
+			try
+			{
+				await Task.Run(
+					() =>
+					{
+						cancellationToken.ThrowIfCancellationRequested();
 
-					ZipFile.ExtractToDirectory(
-						ArchivePath,
-						destinationDirectory,
-						overwriteFiles: true);
-				},
-				cancellationToken);
+						ValidateArchiveContents();
+
+						Directory.CreateDirectory(destinationDirectory);
+
+						ZipFile.ExtractToDirectory(
+							ArchivePath,
+							destinationDirectory,
+							overwriteFiles: true);
+					},
+					cancellationToken);
+
+				stopwatch.Stop();
+
+				AppLog.Information(
+					$"WinPE media cache restored in " +
+					$"{stopwatch.Elapsed.TotalSeconds:F1} seconds.");
+			}
+			catch (OperationCanceledException)
+			{
+				stopwatch.Stop();
+
+				AppLog.Warning(
+					$"WinPE media cache restore was cancelled after " +
+					$"{stopwatch.Elapsed.TotalSeconds:F1} seconds.");
+
+				throw;
+			}
+			catch (Exception exception)
+			{
+				stopwatch.Stop();
+
+				AppLog.Error(
+					$"WinPE media cache restore failed after " +
+					$"{stopwatch.Elapsed.TotalSeconds:F1} seconds.",
+					exception);
+
+				throw;
+			}
 		}
 
 		public async Task<WinPeCacheManifest> LoadManifestAsync(
@@ -262,43 +372,90 @@ namespace Utilities
 
 		public void Delete()
 		{
+			AppLog.Information(
+				$"Deleting WinPE media cache from '{CacheDirectory}'.");
+
 			DeleteFileIfPresent(ArchivePath);
 			DeleteFileIfPresent(ManifestPath);
 			DeleteFileIfPresent(ArchivePath + ".tmp");
 			DeleteFileIfPresent(ManifestPath + ".tmp");
+
+			AppLog.Information(
+				"WinPE media cache deleted.");
 		}
 
-		private static Boolean ManifestMatches(
+		private static Boolean TryGetManifestMismatchReason(
 			WinPeCacheManifest cachedManifest,
-			WinPeCacheManifest expectedManifest)
+			WinPeCacheManifest expectedManifest,
+			out String mismatchReason)
 		{
-			return
-				cachedManifest.SchemaVersion == CurrentSchemaVersion &&
+			if (cachedManifest.SchemaVersion != CurrentSchemaVersion)
+			{
+				mismatchReason =
+					$"schema version changed from {cachedManifest.SchemaVersion} " +
+					$"to {CurrentSchemaVersion}.";
 
-				String.Equals(
+				return false;
+			}
+
+			if (!String.Equals(
 					cachedManifest.AdkVersion,
 					expectedManifest.AdkVersion,
-					StringComparison.OrdinalIgnoreCase) &&
+					StringComparison.OrdinalIgnoreCase))
+			{
+				mismatchReason =
+					"the installed Windows ADK version changed.";
 
-				String.Equals(
+				return false;
+			}
+
+			if (!String.Equals(
 					cachedManifest.Architecture,
 					expectedManifest.Architecture,
-					StringComparison.OrdinalIgnoreCase) &&
+					StringComparison.OrdinalIgnoreCase))
+			{
+				mismatchReason =
+					"the WinPE architecture changed.";
 
-				String.Equals(
+				return false;
+			}
+
+			if (!String.Equals(
 					cachedManifest.WinPeClientHash,
 					expectedManifest.WinPeClientHash,
-					StringComparison.OrdinalIgnoreCase) &&
+					StringComparison.OrdinalIgnoreCase))
+			{
+				mismatchReason =
+					"the WinPE client contents changed.";
 
-				String.Equals(
+				return false;
+			}
+
+			if (!String.Equals(
 					cachedManifest.DriverPackagesHash,
 					expectedManifest.DriverPackagesHash,
-					StringComparison.OrdinalIgnoreCase) &&
+					StringComparison.OrdinalIgnoreCase))
+			{
+				mismatchReason =
+					"the WinPE driver packages changed.";
 
-				String.Equals(
+				return false;
+			}
+
+			if (!String.Equals(
 					cachedManifest.PackageConfigurationHash,
 					expectedManifest.PackageConfigurationHash,
-					StringComparison.OrdinalIgnoreCase);
+					StringComparison.OrdinalIgnoreCase))
+			{
+				mismatchReason =
+					"the WinPE optional-component configuration changed.";
+
+				return false;
+			}
+
+			mismatchReason = "";
+
+			return true;
 		}
 
 		private Boolean ValidateArchiveContents()

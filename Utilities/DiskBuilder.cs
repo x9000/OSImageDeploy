@@ -143,13 +143,12 @@ namespace Utilities
 		{
 			ResetOverallProgress();
 			OnPhaseProgress(DiskBuildPhase.Cleanup, $"Preparing disk number {diskNumber}.",	0);
-			Task returnValue = Task.Run(async () =>
+
+			return Task.Run(async () =>
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 				await PrepareDisk(diskNumber);
 			}, cancellationToken);
-			OnProgress("Preparing Disk", $"Disk number {diskNumber} preparation complete.", percent: 100);
-			return returnValue;
 		}
 
 
@@ -313,9 +312,16 @@ namespace Utilities
 
 		private async Task<WinPeBuildResult> BuildWinPeMediaAsync()
 		{
-			Stopwatch stopwatch = Stopwatch.StartNew();
+			Stopwatch operationStopwatch =
+				Stopwatch.StartNew();
+
 			WinPeEnvironment environment =
 				WinPeEnvironment.Discover();
+
+			AppLog.Information(
+				$"Starting WinPE media operation for " +
+				$"{environment.Architecture} using ADK identity " +
+				$"'{environment.Version}'.");
 
 			WinPeMediaCacheManager cacheManager = new WinPeMediaCacheManager();
 
@@ -343,7 +349,13 @@ namespace Utilities
 				await cacheManager.ExtractAsync(
 					cachedMediaFolder);
 				OnPhaseProgress(DiskBuildPhase.CachedWinPeRestore, "Cached WinPE environment restored.", 100);
-				
+
+				operationStopwatch.Stop();
+
+				AppLog.Information(
+					$"WinPE media operation completed from cache in " +
+					$"{operationStopwatch.Elapsed.TotalSeconds:F1} seconds.");
+
 				return new WinPeBuildResult
 				{
 					WorkingFolder = cachedWorkingFolder,
@@ -483,6 +495,12 @@ namespace Utilities
 				expectedManifest);
 
 			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	"WinPE environment is ready.", 100);
+
+			operationStopwatch.Stop();
+
+			AppLog.Information(
+				$"Fresh WinPE media operation completed in " +
+				$"{operationStopwatch.Elapsed.TotalSeconds:F1} seconds.");
 
 			return new WinPeBuildResult
 			{

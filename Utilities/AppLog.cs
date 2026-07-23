@@ -6,58 +6,78 @@ namespace Utilities
 {
 	public static class AppLog
 	{
+		private static readonly Object _initializationLock =
+			new Object();
+
 		private static Boolean _initialized;
 
 		public static void Initialize()
 		{
-			if (_initialized)
+			lock (_initializationLock)
 			{
-				return;
+				if (_initialized)
+				{
+					return;
+				}
+
+				String logFolder = Path.Combine(
+					Environment.GetFolderPath(
+						Environment.SpecialFolder.CommonApplicationData),
+					"OSImageDeploy",
+					"Logs");
+
+				Directory.CreateDirectory(logFolder);
+
+				String logPath = Path.Combine(
+					logFolder,
+					$"OSImageDeploy-{DateTime.Now:yyyyMMdd}.log");
+
+				Trace.Listeners.Add(
+					new TextWriterTraceListener(
+						logPath,
+						"OSImageDeployFileLog"));
+
+				Trace.AutoFlush = true;
+
+				_initialized = true;
 			}
-
-			String logFolder = Path.Combine(
-				Environment.GetFolderPath(
-					Environment.SpecialFolder.CommonApplicationData),
-				"OSImageDeploy",
-				"Logs");
-
-			Directory.CreateDirectory(logFolder);
-
-			String logPath = Path.Combine(
-				logFolder,
-				$"OSImageDeploy-{DateTime.Now:yyyyMMdd}.log");
-
-			Trace.Listeners.Add(
-				new TextWriterTraceListener(logPath));
-
-			Trace.AutoFlush = true;
-
-			_initialized = true;
 
 			Information("Application logging initialized.");
 		}
 
 		public static void Information(String message)
 		{
-			Trace.TraceInformation(message);
+			Write("INFO ", message);
 		}
 
 		public static void Warning(String message)
 		{
-			Trace.TraceWarning(message);
+			Write("WARN ", message);
 		}
 
 		public static void Error(String message)
 		{
-			Trace.TraceError(message);
+			Write("ERROR", message);
 		}
 
 		public static void Error(
 			String message,
 			Exception exception)
 		{
-			Trace.TraceError(
+			Error(
 				$"{message}{Environment.NewLine}{exception}");
+		}
+
+		private static void Write(
+			String level,
+			String message)
+		{
+			String timestamp =
+				DateTimeOffset.Now.ToString(
+					"yyyy-MM-dd HH:mm:ss.fff zzz");
+
+			Trace.WriteLine(
+				$"{timestamp} [{level}] {message}");
 		}
 	}
 }
