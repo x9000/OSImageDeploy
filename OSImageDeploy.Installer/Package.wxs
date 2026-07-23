@@ -1,0 +1,98 @@
+<Wix
+	xmlns="http://wixtoolset.org/schemas/v4/wxs"
+	xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+	<Package
+		Name="OS Image Deployment Suite"
+		Manufacturer="x9000.com Consulting Services Limited"
+		Version="$(var.ProductVersion)"
+		UpgradeCode="64552430-8321-4966-B779-B464DF8D6E86"
+		Language="1033"
+		Scope="perMachine"
+		InstallerVersion="500">
+
+		<SummaryInformation
+			Description="OS Image Deployment Suite"
+			Manufacturer="x9000.com Consulting Services Limited" />
+
+		<MajorUpgrade
+			DowngradeErrorMessage="A newer version of OS Image Deployment Suite is already installed."
+			Schedule="afterInstallInitialize" />
+
+		<MediaTemplate
+			EmbedCab="yes"
+			CompressionLevel="high" />
+
+		<Property Id="ARPCONTACT" Value="Paul Prior" />
+		<Property Id="ARPURLINFOABOUT" Value="https://x9000.com" />
+
+		<Icon
+			Id="ApplicationIcon"
+			SourceFile="$(sys.SOURCEFILEDIR)..\OSImageDeploy\OSImageDeploy.ico" />
+
+		<Property
+			Id="ARPPRODUCTICON"
+			Value="ApplicationIcon" />
+
+		<StandardDirectory Id="ProgramFiles6432Folder">
+			<Directory
+				Id="INSTALLFOLDER"
+				Name="OS Image Deployment Suite">
+
+				<File
+					Id="MainExecutable"
+					Source="!(bindpath.MainPublish)\OSImageDeploy.exe" />
+
+				<Files Include="!(bindpath.MainPublish)\**">
+					<Exclude Files="!(bindpath.MainPublish)\OSImageDeploy.exe" />
+					<Exclude Files="!(bindpath.MainPublish)\**\*.pdb" />
+				</Files>
+
+				<Directory
+					Id="WINPECLIENTFOLDER"
+					Name="WinPEClient">
+
+					<Files Include="!(bindpath.WinPeClientPublish)\**">
+						<Exclude Files="!(bindpath.WinPeClientPublish)\**\*.pdb" />
+					</Files>
+				</Directory>
+			</Directory>
+		</StandardDirectory>
+
+		<StandardDirectory Id="CommonAppDataFolder">
+			<Directory Id="CommonMicrosoftFolder" Name="Microsoft">
+				<Directory Id="CommonWindowsFolder" Name="Windows">
+					<Directory Id="CommonStartMenuFolder" Name="Start Menu">
+						<Directory Id="CommonProgramsFolder" Name="Programs">
+							<Component
+								Id="StartMenuShortcutComponent"
+								Guid="*">
+
+								<Shortcut
+									Id="StartMenuShortcut"
+									Name="OS Image Deploy"
+									Description="OS Image Deployment Suite"
+									Target="[INSTALLFOLDER]OSImageDeploy.exe"
+									WorkingDirectory="INSTALLFOLDER"
+									Icon="ApplicationIcon" />
+
+								<RegistryValue
+									Root="HKLM"
+									Key="Software\x9000.com Consulting Services Limited\OS Image Deployment Suite"
+									Name="StartMenuShortcut"
+									Type="integer"
+									Value="1"
+									KeyPath="yes" />
+							</Component>
+						</Directory>
+					</Directory>
+				</Directory>
+			</Directory>
+		</StandardDirectory>
+
+		<ui:WixUI
+			Id="WixUI_InstallDir"
+			InstallDirectory="INSTALLFOLDER"
+			ExtendedPathValidation="yes" />
+	</Package>
+</Wix>

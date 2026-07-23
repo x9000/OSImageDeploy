@@ -17,13 +17,27 @@ if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf))
     throw "The file '$FilePath' does not exist."
 }
 
-$certificate = Get-ChildItem -Path Cert:\CurrentUser\My -CodeSigningCert |
-    Where-Object Thumbprint -EQ $normalizedThumbprint |
-    Select-Object -First 1
+$certificateStore = [System.Security.Cryptography.X509Certificates.X509Store]::new(
+    [System.Security.Cryptography.X509Certificates.StoreName]::My,
+    [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
+
+try
+{
+    $certificateStore.Open(
+        [System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+
+    $certificate = $certificateStore.Certificates |
+        Where-Object Thumbprint -EQ $normalizedThumbprint |
+        Select-Object -First 1
+}
+finally
+{
+    $certificateStore.Close()
+}
 
 if ($null -eq $certificate)
 {
-    throw "Code-signing certificate '$normalizedThumbprint' was not found in Cert:\CurrentUser\My."
+    throw "Code-signing certificate '$normalizedThumbprint' was not found in the current user's Personal certificate store."
 }
 
 if (-not $certificate.HasPrivateKey)
