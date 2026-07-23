@@ -98,5 +98,13 @@
 		<WixVariable
 			Id="WixUILicenseRtf"
 			Value="$(sys.SOURCEFILEDIR)License.rtf" />
+
+		<WixVariable
+			Id="WixUIBannerBmp"
+			Value="$(sys.SOURCEFILEDIR)Assets\WixUIBannerBmp.bmp" />
+
+		<WixVariable
+			Id="WixUIDialogBmp"
+			Value="$(sys.SOURCEFILEDIR)Assets\WixUIDialogBmp.bmp" />
 	</Package>
 </Wix>
