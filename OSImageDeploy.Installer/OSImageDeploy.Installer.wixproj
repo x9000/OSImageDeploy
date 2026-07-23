@@ -6,9 +6,7 @@
 		<InstallerPlatform>x64</InstallerPlatform>
 		<AcceptEula>wix7</AcceptEula>
 
-		<ProjectStartDate>2026-05-23</ProjectStartDate>
-		<BuildNumber>$([System.DateTime]::Now.Subtract($([System.DateTime]::Parse('$(ProjectStartDate)'))).Days)</BuildNumber>
-		<ProductVersion>1.0.$(BuildNumber)</ProductVersion>
+		<ProductVersion>$(BuildVersion)</ProductVersion>
 		<DefineConstants>$(DefineConstants);ProductVersion=$(ProductVersion)</DefineConstants>
 
 		<MainApplicationProject>$(MSBuildProjectDirectory)\..\OSImageDeploy\OSImageDeploy.csproj</MainApplicationProject>
@@ -42,12 +40,12 @@
 		<MSBuild
 			Projects="$(MainApplicationProject)"
 			Targets="Restore;Publish"
-			Properties="Configuration=Release;PublishProfile=FolderProfile;RuntimeIdentifier=win-x64;PublishDir=$(MainPublishDirectory);EnableCodeSigning=$(EnableCodeSigning)" />
+			Properties="Configuration=Release;PublishProfile=FolderProfile;RuntimeIdentifier=win-x64;PublishDir=$(MainPublishDirectory);EnableCodeSigning=$(EnableCodeSigning);BuildTimestampUtc=$(BuildTimestampUtc);BuildVersion=$(BuildVersion);BuildInformationalVersion=$(BuildInformationalVersion)" />
 
 		<MSBuild
 			Projects="$(WinPeClientProject)"
 			Targets="Restore;Publish"
-			Properties="Configuration=Release;PublishProfile=FolderProfile1;RuntimeIdentifier=win-x64;PublishDir=$(WinPeClientPublishDirectory);EnableCodeSigning=$(EnableCodeSigning)" />
+			Properties="Configuration=Release;PublishProfile=FolderProfile1;RuntimeIdentifier=win-x64;PublishDir=$(WinPeClientPublishDirectory);EnableCodeSigning=$(EnableCodeSigning);BuildTimestampUtc=$(BuildTimestampUtc);BuildVersion=$(BuildVersion);BuildInformationalVersion=$(BuildInformationalVersion)" />
 	</Target>
 
 	<Target

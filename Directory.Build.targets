@@ -1,0 +1,30 @@
+<Project>
+
+	<Target
+		Name="ReportBuildVersion"
+		BeforeTargets="GetAssemblyVersion"
+		Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+
+		<Message
+			Text="Build version: $(BuildVersion)"
+			Importance="High" />
+	</Target>
+
+	<Target
+		Name="ValidateBuildVersion"
+		BeforeTargets="PrepareForBuild">
+
+		<Error
+			Condition="$(VersionMajor) &gt; 255"
+			Text="The calculated version major field exceeds the Windows Installer maximum of 255." />
+
+		<Error
+			Condition="$(VersionMinor) &gt; 255"
+			Text="The calculated version minor field exceeds the Windows Installer maximum of 255." />
+
+		<Error
+			Condition="$(VersionBuild) &gt; 65535"
+			Text="The calculated version build field exceeds the Windows Installer maximum of 65535." />
+	</Target>
+
+</Project>

@@ -1,0 +1,27 @@
+<Project>
+
+	<PropertyGroup>
+		<ProjectStartDate Condition="'$(ProjectStartDate)' == ''">2026-05-23</ProjectStartDate>
+
+		<!--
+			Windows Installer compares only three numeric version fields and limits
+			them to 255.255.65535. Rotate the major field every 256 days and use
+			the UTC build time for a naturally increasing, minute-unique build field.
+		-->
+		<BuildTimestampUtc Condition="'$(BuildTimestampUtc)' == ''">$([System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffffff'))</BuildTimestampUtc>
+		<VersionDayNumber>$([System.DateTime]::Parse('$(BuildTimestampUtc)').Subtract($([System.DateTime]::Parse('$(ProjectStartDate)'))).Days)</VersionDayNumber>
+		<VersionMinor>$([MSBuild]::Modulo($(VersionDayNumber), 256))</VersionMinor>
+		<VersionCycleBase>$([MSBuild]::Subtract($(VersionDayNumber), $(VersionMinor)))</VersionCycleBase>
+		<VersionMajor>$([MSBuild]::Add(1, $([MSBuild]::Divide($(VersionCycleBase), 256))))</VersionMajor>
+		<VersionBuild>$([System.DateTime]::Parse('$(BuildTimestampUtc)').ToString('HHmm'))</VersionBuild>
+
+		<BuildVersion Condition="'$(BuildVersion)' == ''">$(VersionMajor).$(VersionMinor).$(VersionBuild)</BuildVersion>
+		<BuildInformationalVersion Condition="'$(BuildInformationalVersion)' == ''">$(BuildVersion) ($(BuildTimestampUtc)Z)</BuildInformationalVersion>
+
+		<Version>$(BuildVersion)</Version>
+		<AssemblyVersion>1.0.0.0</AssemblyVersion>
+		<FileVersion>$(BuildVersion).0</FileVersion>
+		<InformationalVersion>$(BuildInformationalVersion)</InformationalVersion>
+	</PropertyGroup>
+
+</Project>
