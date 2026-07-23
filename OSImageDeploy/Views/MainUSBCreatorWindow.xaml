@@ -110,6 +110,29 @@
                     <Button x:Name="RefreshUSBButton" Margin="0,5,0,5" Command="{Binding RefreshUSBButtonCommand, Mode=OneWay}" IsEnabled="{Binding RefreshUSBButtonEnabled}">
                         Refresh USB List
                     </Button>
+                    <Border Background="#26000000"
+                            BorderBrush="#60FFFFFF"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Margin="0,10,0,5"
+                            Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="{Binding WinPeCacheStatusText}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding WinPeCacheDetailsText}"
+                                       FontSize="13"
+                                       Margin="0,4,0,8"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"/>
+                            <Button Content="Rebuild WinPE Cache"
+                                    Command="{Binding RebuildWinPeCacheCommand, Mode=OneWay}"
+                                    IsEnabled="{Binding RebuildWinPeCacheButtonEnabled}"
+                                    FontSize="14"
+                                    Padding="10,6"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Grid.Column="1" Visibility="{Binding PrereqStackPanelVisibility}">
                     <TextBlock Text="Requirements" FontWeight="Bold" HorizontalAlignment="Center"/>

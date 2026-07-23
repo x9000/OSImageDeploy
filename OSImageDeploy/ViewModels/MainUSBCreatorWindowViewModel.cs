@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -23,15 +24,19 @@ namespace ViewModels
 			_installer.ProgressChanged += Installer_ProgressChanged;
 			_diskBuilder = new DiskBuilder();
 			_diskBuilder.ProgressChanged += _diskBuilder_ProgressChanged;
-			
+			_winPeMediaCacheManager =
+				new WinPeMediaCacheManager();
 
 			RefreshUSBButtonCommand = new RelayCommand(execute: RefreshUSBButtonClickHandler, canExecute: RefreshUSBButtonCanExecuteHandler);
 			CreateUSBCommand = new RelayCommand<uint>(execute: CreateUSBClickHandler);
 			ExitCommand = new RelayCommand(execute: ExitCommandHandler, canExecute: ExitCanExecuteHandler);
 			StartPrereqInstalls = new RelayCommand(execute: StartPrereqInstallsHandler);
+			RebuildWinPeCacheCommand =
+				new RelayCommand(execute: RebuildWinPeCacheCommandHandler);
 
 			_ = PerformPrereqTestingAsync();
 			_ = PopulateUSBDriveListAsync();
+			_ = RefreshWinPeCacheStatusAsync();
 		}
 
 		private void _diskBuilder_ProgressChanged(object sender, DiskBuilder.DiskBuilderProgressEventArgs e)
@@ -46,12 +51,16 @@ namespace ViewModels
 
 		private readonly WindowsAdkWinPeInstaller _installer;
 		private readonly DiskBuilder _diskBuilder;
+		private readonly WinPeMediaCacheManager _winPeMediaCacheManager;
 
 		private String _infoTextBlockText = "";
 		private String _subInfoTextBlockText = "";
+		private String _winPeCacheStatusText = "WinPE cache: Checking...";
+		private String _winPeCacheDetailsText = "";
 		private String _titleTextBlockText = $"OS Image Deployment Tool v{Assembly.GetEntryAssembly().GetName().Version.Major}.{Assembly.GetEntryAssembly().GetName().Version.Minor}.{Assembly.GetEntryAssembly().GetName().Version.Build}";
 		private int _usbComboxSelectedItemIndex;
 		private bool _createUSBButtonEnabled = false;
+		private bool _rebuildWinPeCacheButtonEnabled;
 		private bool _preReqInstallButtonEnabled = false;
 		private bool _exitButtonEnabled = true;
 		private bool _refreshUSBButtonEnabled = true;
@@ -66,6 +75,7 @@ namespace ViewModels
 		public RelayCommand ExitCommand { get; }
 		public RelayCommand RefreshUSBButtonCommand { get; }
 		public RelayCommand StartPrereqInstalls { get; }
+		public RelayCommand RebuildWinPeCacheCommand { get; }
 
 		#endregion
 
@@ -114,6 +124,32 @@ namespace ViewModels
 			{
 				_subInfoTextBlockText = value;
 				NotifyPropertyChanged(nameof(SubInfoTextBlockText));
+			}
+		}
+
+		public String WinPeCacheStatusText
+		{
+			get
+			{
+				return _winPeCacheStatusText;
+			}
+			set
+			{
+				_winPeCacheStatusText = value;
+				NotifyPropertyChanged(nameof(WinPeCacheStatusText));
+			}
+		}
+
+		public String WinPeCacheDetailsText
+		{
+			get
+			{
+				return _winPeCacheDetailsText;
+			}
+			set
+			{
+				_winPeCacheDetailsText = value;
+				NotifyPropertyChanged(nameof(WinPeCacheDetailsText));
 			}
 		}
 
@@ -205,6 +241,138 @@ namespace ViewModels
 			{
 				_refreshUSBButtonEnabled = value;
 				NotifyPropertyChanged(nameof(RefreshUSBButtonEnabled));
+			}
+		}
+
+		public bool RebuildWinPeCacheButtonEnabled
+		{
+			get
+			{
+				return _rebuildWinPeCacheButtonEnabled;
+			}
+			set
+			{
+				_rebuildWinPeCacheButtonEnabled = value;
+				NotifyPropertyChanged(
+					nameof(RebuildWinPeCacheButtonEnabled));
+			}
+		}
+
+		#endregion
+
+		#region WinPE Cache
+
+		private async Task RefreshWinPeCacheStatusAsync()
+		{
+			try
+			{
+				if (!_winPeMediaCacheManager.CacheExists)
+				{
+					WinPeCacheStatusText =
+						"WinPE cache: Not available";
+
+					WinPeCacheDetailsText =
+						"A new cache will be created during the next USB build.";
+
+					RebuildWinPeCacheButtonEnabled = false;
+
+					return;
+				}
+
+				WinPeCacheManifest manifest =
+					await _winPeMediaCacheManager.LoadManifestAsync();
+
+				if (manifest == null)
+				{
+					WinPeCacheStatusText =
+						"WinPE cache: Incomplete";
+
+					WinPeCacheDetailsText =
+						"The cache will be rebuilt during the next USB build.";
+
+					RebuildWinPeCacheButtonEnabled = true;
+
+					return;
+				}
+
+				FileInfo archiveInfo =
+					new FileInfo(
+						_winPeMediaCacheManager.ArchivePath);
+
+				String createdText =
+					manifest.CreatedUtc == default
+						? "Unknown"
+						: manifest.CreatedUtc
+							.ToLocalTime()
+							.ToString("g");
+
+				WinPeCacheStatusText =
+					"WinPE cache: Available";
+
+				WinPeCacheDetailsText =
+					$"Created: {createdText}    " +
+					$"Size: {archiveInfo.Length / 1024D / 1024D:F1} MB" +
+					Environment.NewLine +
+					"Validated when USB creation starts.";
+
+				RebuildWinPeCacheButtonEnabled = true;
+			}
+			catch (Exception exception)
+			{
+				WinPeCacheStatusText =
+					"WinPE cache: Status unavailable";
+
+				WinPeCacheDetailsText =
+					"The cache will be checked when USB creation starts.";
+
+				RebuildWinPeCacheButtonEnabled = false;
+
+				AppLog.Error(
+					"Failed to read WinPE media cache status.",
+					exception);
+			}
+		}
+
+		private async void RebuildWinPeCacheCommandHandler()
+		{
+			MessageBoxResult result = MessageBox.Show(
+				"The existing WinPE cache will be deleted. " +
+				"The next USB build will recreate it using the current " +
+				"WinPE client, drivers and packages.",
+				"Rebuild WinPE Cache",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Question);
+
+			if (result != MessageBoxResult.Yes)
+			{
+				return;
+			}
+
+			RebuildWinPeCacheButtonEnabled = false;
+
+			try
+			{
+				_winPeMediaCacheManager.Delete();
+
+				await RefreshWinPeCacheStatusAsync();
+
+				InfoTextBlockText =
+					"WinPE cache deleted. It will be rebuilt during the next USB build.";
+			}
+			catch (Exception exception)
+			{
+				AppLog.Error(
+					"Failed to delete the WinPE media cache.",
+					exception);
+
+				MessageBox.Show(
+					"The WinPE cache could not be deleted. " +
+					"See the application log for details.",
+					"WinPE Cache",
+					MessageBoxButton.OK,
+					MessageBoxImage.Error);
+
+				await RefreshWinPeCacheStatusAsync();
 			}
 		}
 
@@ -314,12 +482,22 @@ namespace ViewModels
 			ExitButtonEnabled = false;
 			CreateUSBButtonEnabled = false;
 			RefreshUSBButtonEnabled = false;
+			RebuildWinPeCacheButtonEnabled = false;
 			DiskBuilder diskBuilder = new DiskBuilder();
 			diskBuilder.ProgressChanged += DiskBuilder_ProgressChanged;
-			await diskBuilder.PrepareDiskAsync(diskNumber);
-			ExitButtonEnabled = true;
-			CreateUSBButtonEnabled = true;
-			RefreshUSBButtonEnabled = true;
+
+			try
+			{
+				await diskBuilder.PrepareDiskAsync(diskNumber);
+			}
+			finally
+			{
+				ExitButtonEnabled = true;
+				CreateUSBButtonEnabled = true;
+				RefreshUSBButtonEnabled = true;
+
+				await RefreshWinPeCacheStatusAsync();
+			}
 		}
 
 		private void DiskBuilder_ProgressChanged(object sender, DiskBuilder.DiskBuilderProgressEventArgs e)
