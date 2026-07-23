@@ -6,6 +6,8 @@ namespace Utilities
 {
 	public static class AppLog
 	{
+		private const Int32 LogRetentionDays = 30;
+
 		private static readonly Object _initializationLock =
 			new Object();
 
@@ -13,6 +15,8 @@ namespace Utilities
 
 		public static void Initialize()
 		{
+			String logFolder;
+
 			lock (_initializationLock)
 			{
 				if (_initialized)
@@ -20,7 +24,7 @@ namespace Utilities
 					return;
 				}
 
-				String logFolder = Path.Combine(
+				logFolder = Path.Combine(
 					Environment.GetFolderPath(
 						Environment.SpecialFolder.CommonApplicationData),
 					"OSImageDeploy",
@@ -43,6 +47,8 @@ namespace Utilities
 			}
 
 			Information("Application logging initialized.");
+
+			DeleteExpiredLogFiles(logFolder);
 		}
 
 		public static void Information(String message)
@@ -78,6 +84,63 @@ namespace Utilities
 
 			Trace.WriteLine(
 				$"{timestamp} [{level}] {message}");
+		}
+
+		private static void DeleteExpiredLogFiles(
+			String logFolder)
+		{
+			DateTime expirationTimeUtc =
+				DateTime.UtcNow.AddDays(-LogRetentionDays);
+
+			String[] logFiles;
+
+			try
+			{
+				logFiles = Directory.GetFiles(
+					logFolder,
+					"OSImageDeploy-*.log",
+					SearchOption.TopDirectoryOnly);
+			}
+			catch (Exception exception)
+			{
+				Warning(
+					$"Unable to enumerate old application logs: " +
+					exception.Message);
+
+				return;
+			}
+
+			Int32 deletedLogCount = 0;
+
+			foreach (String logFile in logFiles)
+			{
+				try
+				{
+					FileInfo fileInfo =
+						new FileInfo(logFile);
+
+					if (fileInfo.LastWriteTimeUtc >= expirationTimeUtc)
+					{
+						continue;
+					}
+
+					File.Delete(logFile);
+					deletedLogCount++;
+				}
+				catch (Exception exception)
+				{
+					Warning(
+						$"Unable to delete expired application log " +
+						$"'{logFile}': {exception.Message}");
+				}
+			}
+
+			if (deletedLogCount > 0)
+			{
+				Information(
+					$"Deleted {deletedLogCount} application log file(s) " +
+					$"older than {LogRetentionDays} days.");
+			}
 		}
 	}
 }
