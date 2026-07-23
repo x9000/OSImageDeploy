@@ -94,5 +94,9 @@
 			Id="WixUI_InstallDir"
 			InstallDirectory="INSTALLFOLDER"
 			ExtendedPathValidation="yes" />
+
+		<WixVariable
+			Id="WixUILicenseRtf"
+			Value="$(sys.SOURCEFILEDIR)License.rtf" />
 	</Package>
 </Wix>
