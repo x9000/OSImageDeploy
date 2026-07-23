@@ -490,8 +490,34 @@ namespace ViewModels
 			{
 				await diskBuilder.PrepareDiskAsync(diskNumber);
 			}
+			catch (Exception exception)
+			{
+				InfoTextBlockText =
+					"USB creation failed.";
+
+				SubInfoTextBlockText = "";
+
+				AppLog.Error(
+					$"USB creation failed for disk number {diskNumber}.",
+					exception);
+
+				MessageBox.Show(
+					"The bootable USB could not be created." +
+					Environment.NewLine +
+					Environment.NewLine +
+					exception.Message +
+					Environment.NewLine +
+					Environment.NewLine +
+					"See the application log for full details.",
+					"USB Creation Failed",
+					MessageBoxButton.OK,
+					MessageBoxImage.Error);
+			}
 			finally
 			{
+				diskBuilder.ProgressChanged -=
+					DiskBuilder_ProgressChanged;
+
 				ExitButtonEnabled = true;
 				CreateUSBButtonEnabled = true;
 				RefreshUSBButtonEnabled = true;
