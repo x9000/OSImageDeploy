@@ -4,7 +4,6 @@ using OSImageDeploy.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -24,8 +23,6 @@ namespace ViewModels
 		{
 			_installer = new WindowsAdkWinPeInstaller();
 			_installer.ProgressChanged += Installer_ProgressChanged;
-			_winPeMediaCacheManager =
-				new WinPeMediaCacheManager();
 			_serviceClient = new OsImageDeployServiceClient();
 
 			RefreshUSBButtonCommand = new RelayCommand(execute: RefreshUSBButtonClickHandler, canExecute: RefreshUSBButtonCanExecuteHandler);
@@ -49,7 +46,6 @@ namespace ViewModels
 		#region Fields
 
 		private readonly WindowsAdkWinPeInstaller _installer;
-		private readonly WinPeMediaCacheManager _winPeMediaCacheManager;
 		private readonly OsImageDeployServiceClient _serviceClient;
 
 		private String _infoTextBlockText = "";
@@ -269,7 +265,10 @@ namespace ViewModels
 		{
 			try
 			{
-				if (!_winPeMediaCacheManager.CacheExists)
+				WinPeCacheStatusSnapshot status =
+					await _serviceClient.GetWinPeCacheStatusAsync();
+
+				if (status.State == WinPeCacheState.Missing)
 				{
 					WinPeCacheStatusText =
 						"WinPE cache: Not available";
@@ -282,10 +281,7 @@ namespace ViewModels
 					return;
 				}
 
-				WinPeCacheManifest manifest =
-					await _winPeMediaCacheManager.LoadManifestAsync();
-
-				if (manifest == null)
+				if (status.State == WinPeCacheState.Incomplete)
 				{
 					WinPeCacheStatusText =
 						"WinPE cache: Incomplete";
@@ -298,14 +294,10 @@ namespace ViewModels
 					return;
 				}
 
-				FileInfo archiveInfo =
-					new FileInfo(
-						_winPeMediaCacheManager.ArchivePath);
-
 				String createdText =
-					manifest.CreatedUtc == default
+					!status.CreatedUtc.HasValue
 						? "Unknown"
-						: manifest.CreatedUtc
+						: status.CreatedUtc.Value
 							.ToLocalTime()
 							.ToString("g");
 
@@ -314,7 +306,7 @@ namespace ViewModels
 
 				WinPeCacheDetailsText =
 					$"Created: {createdText}    " +
-					$"Size: {archiveInfo.Length / 1024D / 1024D:F1} MB" +
+					$"Size: {status.ArchiveSizeBytes / 1024D / 1024D:F1} MB" +
 					Environment.NewLine +
 					"Validated when USB creation starts.";
 
@@ -355,7 +347,8 @@ namespace ViewModels
 
 			try
 			{
-				_winPeMediaCacheManager.Delete();
+				await _serviceClient.ClearWinPeCacheAsync(
+					cacheClearConfirmed: true);
 
 				await RefreshWinPeCacheStatusAsync();
 
@@ -396,13 +389,33 @@ namespace ViewModels
 			PreReqInstallButtonEnabled = false;
 			ExitButtonEnabled = false;
 
-			await _installer.InstallOrModifyAsync();
+			try
+			{
+				await _installer.InstallOrModifyAsync();
+			}
+			catch (Exception exception)
+			{
+				AppLog.Error(
+					"Windows ADK / WinPE prerequisite setup failed or was cancelled.",
+					exception);
 
-			ExitButtonEnabled = true;
-			PreReqChecks.Clear();
+				MessageBox.Show(
+					"Windows ADK / WinPE setup did not complete." +
+					Environment.NewLine +
+					Environment.NewLine +
+					exception.Message,
+					"Prerequisite Setup",
+					MessageBoxButton.OK,
+					MessageBoxImage.Warning);
+			}
+			finally
+			{
+				ExitButtonEnabled = true;
+				PreReqChecks.Clear();
 
-			_ = PerformPrereqTestingAsync();
-			_ = PopulateUSBDriveListAsync();
+				await PerformPrereqTestingAsync();
+				await PopulateUSBDriveListAsync();
+			}
 		}
 
 		private bool ArePrerequisitesInstalled()

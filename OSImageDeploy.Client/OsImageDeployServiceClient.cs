@@ -219,6 +219,48 @@ namespace OSImageDeploy.Client
 			}
 		}
 
+		public async Task<WinPeCacheStatusSnapshot> GetWinPeCacheStatusAsync(
+			CancellationToken cancellationToken = default)
+		{
+			try
+			{
+				WinPeCacheStatusResponse response =
+					await _client.GetWinPeCacheStatusAsync(
+						new GetWinPeCacheStatusRequest(),
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				return GrpcWinPeCacheMapper.ToSnapshot(response);
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
+		public async Task<WinPeCacheStatusSnapshot> ClearWinPeCacheAsync(
+			Boolean cacheClearConfirmed,
+			CancellationToken cancellationToken = default)
+		{
+			try
+			{
+				WinPeCacheStatusResponse response =
+					await _client.ClearWinPeCacheAsync(
+						new ClearWinPeCacheRequest
+						{
+							CacheClearConfirmed = cacheClearConfirmed
+						},
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				return GrpcWinPeCacheMapper.ToSnapshot(response);
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
 		public void Dispose()
 		{
 			_channel.Dispose();

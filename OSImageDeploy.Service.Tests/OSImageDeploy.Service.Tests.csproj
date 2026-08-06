@@ -18,7 +18,9 @@
 	<ItemGroup>
 		<ProjectReference Include="..\OSImageDeploy.Client\OSImageDeploy.Client.csproj" />
 		<ProjectReference Include="..\OSImageDeploy.Contracts\OSImageDeploy.Contracts.csproj" />
+		<ProjectReference Include="..\OSImageDeploy.Platform.Windows\OSImageDeploy.Platform.Windows.csproj" />
 		<ProjectReference Include="..\OSImageDeploy.Transport.Grpc\OSImageDeploy.Transport.Grpc.csproj" />
+		<ProjectReference Include="..\Utilities\Utilities.csproj" />
 	</ItemGroup>
 
 </Project>

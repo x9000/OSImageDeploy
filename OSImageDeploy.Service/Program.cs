@@ -4,6 +4,7 @@ using OSImageDeploy.Platform.Windows;
 using OSImageDeploy.Service.Security;
 using OSImageDeploy.Service.Services;
 using OSImageDeploy.Transport.Grpc;
+using Utilities;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +48,9 @@ builder.Services.AddSingleton<IUsbTargetValidator>(services =>
 	services.GetRequiredService<WindowsUsbTargetProvider>());
 builder.Services.AddSingleton<WindowsUsbMediaWorkflow>();
 builder.Services.AddSingleton<IUsbMediaWorkflow>(services =>
+	services.GetRequiredService<WindowsUsbMediaWorkflow>());
+builder.Services.AddSingleton<WinPeMediaCacheManager>();
+builder.Services.AddSingleton<IWinPeCacheService>(services =>
 	services.GetRequiredService<WindowsUsbMediaWorkflow>());
 builder.Services.AddSingleton<IUsbMediaOperationCoordinator>(services =>
 	new UsbMediaOperationCoordinator(

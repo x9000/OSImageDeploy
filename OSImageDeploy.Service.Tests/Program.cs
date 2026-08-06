@@ -2,8 +2,10 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using OSImageDeploy.Client;
 using OSImageDeploy.Contracts;
+using OSImageDeploy.Platform.Windows;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
+using Utilities;
 using ContractOperationProgress = OSImageDeploy.Contracts.OperationProgress;
 using ContractOperationState = OSImageDeploy.Contracts.UsbMediaOperationState;
 
@@ -73,6 +75,74 @@ Assert(
 
 Console.WriteLine("PASS: USB media operation gRPC contract round trip.");
 
+WinPeCacheStatusSnapshot cacheSnapshot =
+	new WinPeCacheStatusSnapshot
+	{
+		State = OSImageDeploy.Contracts.WinPeCacheState.Available,
+		CreatedUtc = DateTimeOffset.UtcNow,
+		ArchiveSizeBytes = 123456789
+	};
+
+WinPeCacheStatusSnapshot cacheRoundTrip =
+	GrpcWinPeCacheMapper.ToSnapshot(
+		GrpcWinPeCacheMapper.ToMessage(cacheSnapshot));
+
+Assert(cacheRoundTrip.State == cacheSnapshot.State, "Cache state changed.");
+Assert(
+	cacheRoundTrip.CreatedUtc?.ToUnixTimeMilliseconds() ==
+		cacheSnapshot.CreatedUtc?.ToUnixTimeMilliseconds(),
+	"Cache creation time changed.");
+Assert(
+	cacheRoundTrip.ArchiveSizeBytes == cacheSnapshot.ArchiveSizeBytes,
+	"Cache archive size changed.");
+
+Console.WriteLine("PASS: WinPE cache gRPC contract round trip.");
+
+String cacheTestDirectory = Path.Combine(
+	Path.GetTempPath(),
+	$"OSImageDeploy-cache-test-{Guid.NewGuid():N}");
+
+try
+{
+	WinPeMediaCacheManager cacheManager =
+		new WinPeMediaCacheManager(cacheTestDirectory);
+	WindowsUsbMediaWorkflow workflow =
+		new WindowsUsbMediaWorkflow(
+			new WindowsUsbTargetProvider(),
+			cacheManager);
+
+	WinPeCacheStatusSnapshot missingStatus =
+		await workflow.GetStatusAsync();
+	Assert(
+		missingStatus.State == OSImageDeploy.Contracts.WinPeCacheState.Missing,
+		"An empty cache directory was not reported as missing.");
+
+	Directory.CreateDirectory(cacheTestDirectory);
+	await File.WriteAllBytesAsync(cacheManager.ArchivePath, new Byte[] { 1 });
+
+	WinPeCacheStatusSnapshot incompleteStatus =
+		await workflow.GetStatusAsync();
+	Assert(
+		incompleteStatus.State ==
+			OSImageDeploy.Contracts.WinPeCacheState.Incomplete,
+		"A partial cache was not reported as incomplete.");
+
+	WinPeCacheStatusSnapshot clearedStatus =
+		await workflow.ClearAsync();
+	Assert(
+		clearedStatus.State == OSImageDeploy.Contracts.WinPeCacheState.Missing,
+		"The cache was not missing after it was cleared.");
+}
+finally
+{
+	if (Directory.Exists(cacheTestDirectory))
+	{
+		Directory.Delete(cacheTestDirectory, recursive: true);
+	}
+}
+
+Console.WriteLine("PASS: Windows WinPE cache status and clear boundary.");
+
 if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 {
 	using GrpcChannel channel = NamedPipeGrpcChannelFactory.Create();
@@ -117,6 +187,35 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 		"The service accepted an unconfirmed destructive request.");
 
 	Console.WriteLine("PASS: Live destructive-operation confirmation guard.");
+
+	await client.GetWinPeCacheStatusAsync(
+		new GetWinPeCacheStatusRequest(),
+		deadline: DateTime.UtcNow.AddSeconds(10));
+
+	Console.WriteLine("PASS: Live WinPE cache status call.");
+
+	Boolean unconfirmedCacheClearRejected = false;
+
+	try
+	{
+		await client.ClearWinPeCacheAsync(
+			new ClearWinPeCacheRequest
+			{
+				CacheClearConfirmed = false
+			},
+			deadline: DateTime.UtcNow.AddSeconds(10));
+	}
+	catch (RpcException exception) when (
+		exception.StatusCode == StatusCode.InvalidArgument)
+	{
+		unconfirmedCacheClearRejected = true;
+	}
+
+	Assert(
+		unconfirmedCacheClearRejected,
+		"The service accepted an unconfirmed WinPE cache-clear request.");
+
+	Console.WriteLine("PASS: Live WinPE cache-clear confirmation guard.");
 }
 
 static void Assert(Boolean condition, String message)

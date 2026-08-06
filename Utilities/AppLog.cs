@@ -26,7 +26,7 @@ namespace Utilities
 
 				logFolder = Path.Combine(
 					Environment.GetFolderPath(
-						Environment.SpecialFolder.CommonApplicationData),
+						Environment.SpecialFolder.LocalApplicationData),
 					"OSImageDeploy",
 					"Logs");
 

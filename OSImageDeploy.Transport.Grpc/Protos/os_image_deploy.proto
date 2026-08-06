@@ -12,6 +12,8 @@ service OsImageDeployControl {
 	rpc WatchUsbMediaBuild (UsbMediaOperationRequest) returns (stream UsbMediaOperationUpdate);
 	rpc GetUsbMediaBuildStatus (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
 	rpc CancelUsbMediaBuild (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
+	rpc GetWinPeCacheStatus (GetWinPeCacheStatusRequest) returns (WinPeCacheStatusResponse);
+	rpc ClearWinPeCache (ClearWinPeCacheRequest) returns (WinPeCacheStatusResponse);
 }
 
 message GetServiceStatusRequest {
@@ -101,4 +103,24 @@ enum OperationLogLevel {
 	OPERATION_LOG_LEVEL_INFORMATION = 1;
 	OPERATION_LOG_LEVEL_WARNING = 2;
 	OPERATION_LOG_LEVEL_ERROR = 3;
+}
+
+message GetWinPeCacheStatusRequest {
+}
+
+message ClearWinPeCacheRequest {
+	bool cache_clear_confirmed = 1;
+}
+
+message WinPeCacheStatusResponse {
+	WinPeCacheState state = 1;
+	int64 created_unix_time_ms = 2;
+	bool has_created_time = 3;
+	int64 archive_size_bytes = 4;
+}
+
+enum WinPeCacheState {
+	WIN_PE_CACHE_STATE_MISSING = 0;
+	WIN_PE_CACHE_STATE_INCOMPLETE = 1;
+	WIN_PE_CACHE_STATE_AVAILABLE = 2;
 }

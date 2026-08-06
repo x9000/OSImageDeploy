@@ -4,15 +4,23 @@ using Utilities;
 
 namespace OSImageDeploy.Platform.Windows
 {
-	public sealed class WindowsUsbMediaWorkflow : IUsbMediaWorkflow
+	public sealed class WindowsUsbMediaWorkflow :
+		IUsbMediaWorkflow,
+		IWinPeCacheService
 	{
 		private readonly WindowsUsbTargetProvider _targetProvider;
+		private readonly WinPeMediaCacheManager _cacheManager;
+		private readonly SemaphoreSlim _operationGate =
+			new SemaphoreSlim(1, 1);
 
 		public WindowsUsbMediaWorkflow(
-			WindowsUsbTargetProvider targetProvider)
+			WindowsUsbTargetProvider targetProvider,
+			WinPeMediaCacheManager cacheManager)
 		{
 			_targetProvider = targetProvider ??
 				throw new ArgumentNullException(nameof(targetProvider));
+			_cacheManager = cacheManager ??
+				throw new ArgumentNullException(nameof(cacheManager));
 		}
 
 		public Task<IReadOnlyList<UsbTargetDescriptor>> GetEligibleTargetsAsync(
@@ -44,58 +52,143 @@ namespace OSImageDeploy.Platform.Windows
 					"USB media creation was not explicitly confirmed.");
 			}
 
-			if (request.RebuildWinPeCache)
-			{
-				cancellationToken.ThrowIfCancellationRequested();
-				new WinPeMediaCacheManager().Delete();
-			}
-
-			DiskBuilder diskBuilder = new DiskBuilder();
-
-			EventHandler<DiskBuilder.DiskBuilderProgressEventArgs> handler =
-				(_, update) => progress.Report(
-					new OperationProgress
-					{
-						Stage = update.Stage,
-						Message = update.Message,
-						OverallPercent = update.Percent
-					});
-
-			diskBuilder.ProgressChanged += handler;
+			await _operationGate.WaitAsync(cancellationToken);
 
 			try
 			{
-				await diskBuilder.PrepareDiskAsync(
-					async token =>
-					{
-						progress.Report(
-							new OperationProgress
-							{
-								Stage = "Validating Target",
-								Message =
-									"Revalidating the selected USB target immediately before disk preparation.",
-								OverallPercent = 1
-							});
+				if (request.RebuildWinPeCache)
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+					_cacheManager.Delete();
+				}
 
-						UsbTargetValidationResult validation =
-							await _targetProvider.ValidateTargetAsync(
-								request.Target,
-								token);
+				DiskBuilder diskBuilder = new DiskBuilder();
 
-						if (!validation.IsValid ||
-							validation.ResolvedTarget == null)
+				EventHandler<DiskBuilder.DiskBuilderProgressEventArgs> handler =
+					(_, update) => progress.Report(
+						new OperationProgress
 						{
-							throw new InvalidOperationException(
-								validation.Summary);
-						}
+							Stage = update.Stage,
+							Message = update.Message,
+							OverallPercent = update.Percent
+						});
 
-						return validation.ResolvedTarget.DiskNumber;
-					},
-					cancellationToken);
+				diskBuilder.ProgressChanged += handler;
+
+				try
+				{
+					await diskBuilder.PrepareDiskAsync(
+						async token =>
+						{
+							progress.Report(
+								new OperationProgress
+								{
+									Stage = "Validating Target",
+									Message =
+										"Revalidating the selected USB target immediately before disk preparation.",
+									OverallPercent = 1
+								});
+
+							UsbTargetValidationResult validation =
+								await _targetProvider.ValidateTargetAsync(
+									request.Target,
+									token);
+
+							if (!validation.IsValid ||
+								validation.ResolvedTarget == null)
+							{
+								throw new InvalidOperationException(
+									validation.Summary);
+							}
+
+							return validation.ResolvedTarget.DiskNumber;
+						},
+						cancellationToken);
+				}
+				finally
+				{
+					diskBuilder.ProgressChanged -= handler;
+				}
 			}
 			finally
 			{
-				diskBuilder.ProgressChanged -= handler;
+				_operationGate.Release();
+			}
+		}
+
+		public async Task<WinPeCacheStatusSnapshot> GetStatusAsync(
+			CancellationToken cancellationToken = default)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+
+			Boolean archiveExists = File.Exists(_cacheManager.ArchivePath);
+			Boolean manifestExists = File.Exists(_cacheManager.ManifestPath);
+
+			if (!archiveExists && !manifestExists)
+			{
+				return new WinPeCacheStatusSnapshot
+				{
+					State = WinPeCacheState.Missing
+				};
+			}
+
+			if (!archiveExists || !manifestExists)
+			{
+				return new WinPeCacheStatusSnapshot
+				{
+					State = WinPeCacheState.Incomplete
+				};
+			}
+
+			WinPeCacheManifest? manifest;
+
+			try
+			{
+				manifest = await _cacheManager.LoadManifestAsync(
+					cancellationToken);
+			}
+			catch (System.Text.Json.JsonException)
+			{
+				return new WinPeCacheStatusSnapshot
+				{
+					State = WinPeCacheState.Incomplete
+				};
+			}
+
+			if (manifest == null)
+			{
+				return new WinPeCacheStatusSnapshot
+				{
+					State = WinPeCacheState.Incomplete
+				};
+			}
+
+			return new WinPeCacheStatusSnapshot
+			{
+				State = WinPeCacheState.Available,
+				CreatedUtc = manifest.CreatedUtc,
+				ArchiveSizeBytes =
+					new FileInfo(_cacheManager.ArchivePath).Length
+			};
+		}
+
+		public async Task<WinPeCacheStatusSnapshot> ClearAsync(
+			CancellationToken cancellationToken = default)
+		{
+			if (!await _operationGate.WaitAsync(0, cancellationToken))
+			{
+				throw new InvalidOperationException(
+					"The WinPE cache cannot be cleared while USB media creation is running.");
+			}
+
+			try
+			{
+				_cacheManager.Delete();
+				return await GetStatusAsync(cancellationToken);
+			}
+			finally
+			{
+				_operationGate.Release();
 			}
 		}
 	}

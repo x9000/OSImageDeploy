@@ -13,17 +13,20 @@ namespace OSImageDeploy.Service.Services
 		private readonly IUsbTargetDiscovery _targetDiscovery;
 		private readonly IUsbTargetValidator _targetValidator;
 		private readonly IUsbMediaOperationCoordinator _operationCoordinator;
+		private readonly IWinPeCacheService _winPeCacheService;
 		private readonly ILogger<OsImageDeployControlService> _logger;
 
 		public OsImageDeployControlService(
 			IUsbTargetDiscovery targetDiscovery,
 			IUsbTargetValidator targetValidator,
 			IUsbMediaOperationCoordinator operationCoordinator,
+			IWinPeCacheService winPeCacheService,
 			ILogger<OsImageDeployControlService> logger)
 		{
 			_targetDiscovery = targetDiscovery;
 			_targetValidator = targetValidator;
 			_operationCoordinator = operationCoordinator;
+			_winPeCacheService = winPeCacheService;
 			_logger = logger;
 		}
 
@@ -280,6 +283,83 @@ namespace OSImageDeploy.Service.Services
 			{
 				throw new RpcException(
 					new Status(StatusCode.NotFound, exception.Message));
+			}
+		}
+
+		public override async Task<WinPeCacheStatusResponse>
+			GetWinPeCacheStatus(
+				GetWinPeCacheStatusRequest request,
+				ServerCallContext context)
+		{
+			try
+			{
+				WinPeCacheStatusSnapshot status =
+					await _winPeCacheService.GetStatusAsync(
+						context.CancellationToken);
+
+				return GrpcWinPeCacheMapper.ToMessage(status);
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (Exception exception)
+			{
+				_logger.LogError(
+					exception,
+					"Failed to read the WinPE cache status.");
+
+				throw new RpcException(
+					new Status(
+						StatusCode.Internal,
+						"The WinPE cache status could not be read."));
+			}
+		}
+
+		public override async Task<WinPeCacheStatusResponse> ClearWinPeCache(
+			ClearWinPeCacheRequest request,
+			ServerCallContext context)
+		{
+			if (!request.CacheClearConfirmed)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						"Explicit WinPE cache-clear confirmation is required."));
+			}
+
+			try
+			{
+				WinPeCacheStatusSnapshot status =
+					await _winPeCacheService.ClearAsync(
+						context.CancellationToken);
+
+				_logger.LogWarning(
+					"The service-owned WinPE media cache was cleared by a local client.");
+
+				return GrpcWinPeCacheMapper.ToMessage(status);
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (InvalidOperationException exception)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.ResourceExhausted,
+						exception.Message));
+			}
+			catch (Exception exception)
+			{
+				_logger.LogError(
+					exception,
+					"Failed to clear the WinPE media cache.");
+
+				throw new RpcException(
+					new Status(
+						StatusCode.Internal,
+						"The WinPE media cache could not be cleared."));
 			}
 		}
 

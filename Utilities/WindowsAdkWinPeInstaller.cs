@@ -315,7 +315,17 @@ public sealed class WindowsAdkWinPeInstaller
 
 		string expectedExeName = displayName.Contains("Windows PE", StringComparison.OrdinalIgnoreCase) ? "adkwinpesetup.exe" : "adksetup.exe";
 
-		foreach (string filePath in Directory.EnumerateFiles(packageCachePath, expectedExeName, SearchOption.AllDirectories))
+		EnumerationOptions enumerationOptions = new EnumerationOptions
+		{
+			RecurseSubdirectories = true,
+			IgnoreInaccessible = true,
+			ReturnSpecialDirectories = false
+		};
+
+		foreach (string filePath in Directory.EnumerateFiles(
+			packageCachePath,
+			expectedExeName,
+			enumerationOptions))
 		{
 			return filePath;
 		}
