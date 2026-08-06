@@ -2,6 +2,10 @@
   <Folder Name="/Solution Items/" />
   <Project Path="MVVMLibrary/MVVMLibrary.csproj" Id="4f7e0eb9-b78c-40b1-94d0-629718528991" />
   <Project Path="OSImageDeploy/OSImageDeploy.csproj" />
+  <Project Path="OSImageDeploy.Contracts/OSImageDeploy.Contracts.csproj" />
+  <Project Path="OSImageDeploy.Engine/OSImageDeploy.Engine.csproj" />
+  <Project Path="OSImageDeploy.Engine.Tests/OSImageDeploy.Engine.Tests.csproj" />
+  <Project Path="OSImageDeploy.Platform.Windows/OSImageDeploy.Platform.Windows.csproj" />
   <Project Path="OSImageDeployClient/OSImageDeployClient.csproj" Id="0687d123-8ba2-42b2-9d29-7f00a7070eaa" />
   <Project Path="OSImageDeploy.Installer/OSImageDeploy.Installer.wixproj">
     <Platform Project="x64" />
