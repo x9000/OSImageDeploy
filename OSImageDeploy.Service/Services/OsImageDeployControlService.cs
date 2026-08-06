@@ -115,7 +115,10 @@ namespace OSImageDeploy.Service.Services
 					new ValidateUsbTargetResponse
 					{
 						IsValid = result.IsValid,
-						Summary = result.Summary
+						Summary = result.Summary,
+						ResolvedTarget = result.ResolvedTarget == null
+							? null
+							: GrpcTargetMapper.ToMessage(result.ResolvedTarget)
 					};
 
 				response.Warnings.AddRange(result.Warnings);

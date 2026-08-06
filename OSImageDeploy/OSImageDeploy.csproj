@@ -24,6 +24,8 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\MVVMLibrary\MVVMLibrary.csproj" />
+		<ProjectReference Include="..\OSImageDeploy.Client\OSImageDeploy.Client.csproj" />
+		<ProjectReference Include="..\OSImageDeploy.Contracts\OSImageDeploy.Contracts.csproj" />
 		<ProjectReference Include="..\Utilities\Utilities.csproj" />
 	</ItemGroup>
 
@@ -63,7 +65,15 @@
 
 			<FilesToSign Include="$(TargetDir)MVVMLibrary.dll" Condition="Exists('$(TargetDir)MVVMLibrary.dll')" />
 
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Client.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Client.dll')" />
+
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Contracts.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Contracts.dll')" />
+
 			<FilesToSign Include="$(TargetDir)OSImageDeploy.dll" Condition="Exists('$(TargetDir)OSImageDeploy.dll')" />
+
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Engine.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Engine.dll')" />
+
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Transport.Grpc.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Transport.Grpc.dll')" />
 			
 			<FilesToSign Include="$(TargetDir)Utilities.dll" Condition="Exists('$(TargetDir)Utilities.dll')" />
 		</ItemGroup>

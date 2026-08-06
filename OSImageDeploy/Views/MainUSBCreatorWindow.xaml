@@ -95,8 +95,8 @@
             </StackPanel>
             <StackPanel Grid.Column="1" Grid.Row="1" Width="600">
                 <StackPanel Visibility="{Binding MainStackPanelVisibility}">
-                    <ComboBox x:Name="USBListComboBox" ItemsSource="{Binding ListOfUSBDrives}" Margin="0,0,0,10" SelectedIndex="{Binding USBComboxSelectedItemIndex}" Width="420"/>
-                    <Button x:Name="CreateUSBButton" Margin="0,5,0,5" IsEnabled="{Binding CreateUSBButtonEnabled}" Command="{Binding CreateUSBCommand, Mode=OneWay}" CommandParameter="{Binding SelectedItem.DiskNumber, ElementName=USBListComboBox}">
+                    <ComboBox x:Name="USBListComboBox" ItemsSource="{Binding ListOfUSBDrives}" DisplayMemberPath="DisplayName" Margin="0,0,0,10" SelectedIndex="{Binding USBComboxSelectedItemIndex}" Width="420"/>
+                    <Button x:Name="CreateUSBButton" Margin="0,5,0,5" IsEnabled="{Binding CreateUSBButtonEnabled}" Command="{Binding CreateUSBCommand, Mode=OneWay}" CommandParameter="{Binding SelectedItem, ElementName=USBListComboBox}">
                         <StackPanel>
                             <TextBlock TextAlignment="Center">
                         Create a bootable USB

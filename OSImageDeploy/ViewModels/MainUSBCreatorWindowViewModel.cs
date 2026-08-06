@@ -1,4 +1,6 @@
 ﻿using Models;
+using OSImageDeploy.Client;
+using OSImageDeploy.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -26,9 +28,12 @@ namespace ViewModels
 			_diskBuilder.ProgressChanged += _diskBuilder_ProgressChanged;
 			_winPeMediaCacheManager =
 				new WinPeMediaCacheManager();
+			_serviceClient = new OsImageDeployServiceClient();
 
 			RefreshUSBButtonCommand = new RelayCommand(execute: RefreshUSBButtonClickHandler, canExecute: RefreshUSBButtonCanExecuteHandler);
-			CreateUSBCommand = new RelayCommand<uint>(execute: CreateUSBClickHandler);
+			CreateUSBCommand =
+				new RelayCommand<UsbTargetDescriptor>(
+					execute: CreateUSBClickHandler);
 			ExitCommand = new RelayCommand(execute: ExitCommandHandler, canExecute: ExitCanExecuteHandler);
 			StartPrereqInstalls = new RelayCommand(execute: StartPrereqInstallsHandler);
 			RebuildWinPeCacheCommand =
@@ -52,6 +57,7 @@ namespace ViewModels
 		private readonly WindowsAdkWinPeInstaller _installer;
 		private readonly DiskBuilder _diskBuilder;
 		private readonly WinPeMediaCacheManager _winPeMediaCacheManager;
+		private readonly OsImageDeployServiceClient _serviceClient;
 
 		private String _infoTextBlockText = "";
 		private String _subInfoTextBlockText = "";
@@ -71,7 +77,7 @@ namespace ViewModels
 
 		#region Commands
 
-		public RelayCommand<uint> CreateUSBCommand { get; }
+		public RelayCommand<UsbTargetDescriptor> CreateUSBCommand { get; }
 		public RelayCommand ExitCommand { get; }
 		public RelayCommand RefreshUSBButtonCommand { get; }
 		public RelayCommand StartPrereqInstalls { get; }
@@ -82,7 +88,8 @@ namespace ViewModels
 		#region Collections
 
 		public ObservableCollection<PreCheckModel> PreReqChecks { get; set; } = new ObservableCollection<PreCheckModel>();
-		public ObservableCollection<FSManager.DiskInfo> ListOfUSBDrives { get; set; } = new ObservableCollection<FSManager.DiskInfo>();
+		public ObservableCollection<UsbTargetDescriptor> ListOfUSBDrives { get; set; } =
+			new ObservableCollection<UsbTargetDescriptor>();
 
 		#endregion
 
@@ -434,33 +441,51 @@ namespace ViewModels
 
 		private async Task PopulateUSBDriveListAsync()
 		{
-			List<FSManager.DiskInfo> disks = await Task.Run(() =>
-				FSManager.EnumerateDisks()
-					.Where(disk => disk.InterfaceType.Contains("USB"))
-					.ToList());
-
-			ListOfUSBDrives.Clear();
-
-			if (disks.Count > 0)
-			{
-				foreach (FSManager.DiskInfo disk in disks)
-				{
-					ListOfUSBDrives.Add(disk);
-				}
-			}
-			else
-			{
-				ListOfUSBDrives.Add(new FSManager.DiskInfo { Name = "No USB suitable devices found." });
-			}
-
-			USBComboxSelectedItemIndex = 0;
-
 			bool prerequisitesInstalled = ArePrerequisitesInstalled();
 
 			PreReqInstallButtonEnabled = !prerequisitesInstalled;
 			UpdatePrerequisitePanelVisibility(prerequisitesInstalled);
+			CreateUSBButtonEnabled = false;
+			RefreshUSBButtonEnabled = false;
 
-			CreateUSBButtonEnabled = prerequisitesInstalled && disks.Count > 0;
+			try
+			{
+				IReadOnlyList<UsbTargetDescriptor> targets =
+					await _serviceClient.GetEligibleTargetsAsync();
+
+				ListOfUSBDrives.Clear();
+
+				foreach (UsbTargetDescriptor target in targets)
+				{
+					ListOfUSBDrives.Add(target);
+				}
+
+				USBComboxSelectedItemIndex = targets.Count > 0 ? 0 : -1;
+				CreateUSBButtonEnabled =
+					prerequisitesInstalled && targets.Count > 0;
+
+				if (targets.Count == 0)
+				{
+					InfoTextBlockText =
+						"No suitable USB storage devices were reported by the service.";
+				}
+			}
+			catch (OsImageDeployServiceException exception)
+			{
+				ListOfUSBDrives.Clear();
+				USBComboxSelectedItemIndex = -1;
+				InfoTextBlockText =
+					"The OS Image Deploy service is unavailable. " +
+					"USB creation is disabled.";
+
+				AppLog.Error(
+					"Failed to retrieve USB targets from the service.",
+					exception);
+			}
+			finally
+			{
+				RefreshUSBButtonEnabled = true;
+			}
 		}
 
 		#endregion
@@ -477,8 +502,15 @@ namespace ViewModels
 			Environment.Exit(0);
 		}
 
-		private async void CreateUSBClickHandler(uint diskNumber)
+		private async void CreateUSBClickHandler(
+			UsbTargetDescriptor selectedTarget)
 		{
+			if (selectedTarget == null ||
+				String.IsNullOrWhiteSpace(selectedTarget.TargetId))
+			{
+				return;
+			}
+
 			ExitButtonEnabled = false;
 			CreateUSBButtonEnabled = false;
 			RefreshUSBButtonEnabled = false;
@@ -488,7 +520,36 @@ namespace ViewModels
 
 			try
 			{
-				await diskBuilder.PrepareDiskAsync(diskNumber);
+				UsbTargetValidationResult validation =
+					await _serviceClient.ValidateTargetAsync(selectedTarget);
+
+				if (!validation.IsValid || validation.ResolvedTarget == null)
+				{
+					throw new InvalidOperationException(validation.Summary);
+				}
+
+				if (validation.Warnings.Count > 0)
+				{
+					MessageBoxResult result = MessageBox.Show(
+						validation.Summary +
+						Environment.NewLine +
+						Environment.NewLine +
+						String.Join(Environment.NewLine, validation.Warnings) +
+						Environment.NewLine +
+						Environment.NewLine +
+						"Continue with USB creation?",
+						"USB Target Warning",
+						MessageBoxButton.YesNo,
+						MessageBoxImage.Warning);
+
+					if (result != MessageBoxResult.Yes)
+					{
+						return;
+					}
+				}
+
+				await diskBuilder.PrepareDiskAsync(
+					validation.ResolvedTarget.DiskNumber);
 			}
 			catch (Exception exception)
 			{
@@ -498,7 +559,7 @@ namespace ViewModels
 				SubInfoTextBlockText = "";
 
 				AppLog.Error(
-					$"USB creation failed for disk number {diskNumber}.",
+					$"USB creation failed for target {selectedTarget.TargetId}.",
 					exception);
 
 				MessageBox.Show(
@@ -519,10 +580,10 @@ namespace ViewModels
 					DiskBuilder_ProgressChanged;
 
 				ExitButtonEnabled = true;
-				CreateUSBButtonEnabled = true;
 				RefreshUSBButtonEnabled = true;
 
 				await RefreshWinPeCacheStatusAsync();
+				await PopulateUSBDriveListAsync();
 			}
 		}
 

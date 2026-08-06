@@ -46,6 +46,9 @@ static void EligibleUsbTargetIsAccepted()
 	UsbTargetValidationResult result = UsbTargetSafetyPolicy.Validate(target, target);
 
 	Assert(result.IsValid, result.Summary);
+	Assert(
+		result.ResolvedTarget?.DiskNumber == target.DiskNumber,
+		"The validated target was not returned to the caller.");
 }
 
 static void SystemDiskIsRejected()
@@ -110,6 +113,9 @@ static void ReassignedDiskNumberIsAccepted()
 	Assert(
 		result.Warnings.Any(warning => warning.Contains("reassigned")),
 		"The disk-number reassignment was not reported.");
+	Assert(
+		result.ResolvedTarget?.DiskNumber == 7,
+		"The service-resolved disk number was not returned.");
 }
 
 static void AssertRejected(

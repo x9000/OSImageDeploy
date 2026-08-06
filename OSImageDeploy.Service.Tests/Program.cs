@@ -1,8 +1,8 @@
 using Grpc.Net.Client;
+using OSImageDeploy.Client;
 using OSImageDeploy.Contracts;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
-using System.IO.Pipes;
 
 UsbTargetDescriptor original = new UsbTargetDescriptor
 {
@@ -42,28 +42,7 @@ Console.WriteLine("PASS: USB target gRPC contract round trip.");
 
 if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 {
-	SocketsHttpHandler handler = new SocketsHttpHandler
-	{
-		ConnectCallback = async (context, cancellationToken) =>
-		{
-			NamedPipeClientStream pipe = new NamedPipeClientStream(
-				serverName: ".",
-				pipeName: GrpcTransportDefaults.PipeName,
-				direction: PipeDirection.InOut,
-				options: PipeOptions.Asynchronous);
-
-			await pipe.ConnectAsync(cancellationToken);
-
-			return pipe;
-		}
-	};
-
-	using GrpcChannel channel = GrpcChannel.ForAddress(
-		"http://localhost",
-		new GrpcChannelOptions
-		{
-			HttpHandler = handler
-		});
+	using GrpcChannel channel = NamedPipeGrpcChannelFactory.Create();
 
 	OsImageDeployControl.OsImageDeployControlClient client =
 		new OsImageDeployControl.OsImageDeployControlClient(channel);

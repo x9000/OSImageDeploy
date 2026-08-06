@@ -8,5 +8,7 @@ namespace OSImageDeploy.Contracts
 
 		public IReadOnlyList<String> Warnings { get; init; } =
 			Array.Empty<String>();
+
+		public UsbTargetDescriptor? ResolvedTarget { get; init; }
 	}
 }

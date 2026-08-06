@@ -112,11 +112,12 @@ namespace OSImageDeploy.Engine
 			if (errors.Count > 0)
 			{
 				return new UsbTargetValidationResult
-				{
-					IsValid = false,
-					Summary = String.Join(" ", errors),
-					Warnings = warnings
-				};
+					{
+						IsValid = false,
+						Summary = String.Join(" ", errors),
+						Warnings = warnings,
+						ResolvedTarget = currentTarget
+					};
 			}
 
 			return new UsbTargetValidationResult
@@ -124,7 +125,8 @@ namespace OSImageDeploy.Engine
 				IsValid = true,
 				Summary =
 					$"Disk {currentTarget.DiskNumber} is an eligible USB target.",
-				Warnings = warnings
+				Warnings = warnings,
+				ResolvedTarget = currentTarget
 			};
 		}
 
