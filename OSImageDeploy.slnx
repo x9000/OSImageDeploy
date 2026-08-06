@@ -6,6 +6,9 @@
   <Project Path="OSImageDeploy.Engine/OSImageDeploy.Engine.csproj" />
   <Project Path="OSImageDeploy.Engine.Tests/OSImageDeploy.Engine.Tests.csproj" />
   <Project Path="OSImageDeploy.Platform.Windows/OSImageDeploy.Platform.Windows.csproj" />
+  <Project Path="OSImageDeploy.Service/OSImageDeploy.Service.csproj" />
+  <Project Path="OSImageDeploy.Service.Tests/OSImageDeploy.Service.Tests.csproj" />
+  <Project Path="OSImageDeploy.Transport.Grpc/OSImageDeploy.Transport.Grpc.csproj" />
   <Project Path="OSImageDeployClient/OSImageDeployClient.csproj" Id="0687d123-8ba2-42b2-9d29-7f00a7070eaa" />
   <Project Path="OSImageDeploy.Installer/OSImageDeploy.Installer.wixproj">
     <Platform Project="x64" />
