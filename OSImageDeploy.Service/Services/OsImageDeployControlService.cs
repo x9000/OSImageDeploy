@@ -12,15 +12,18 @@ namespace OSImageDeploy.Service.Services
 	{
 		private readonly IUsbTargetDiscovery _targetDiscovery;
 		private readonly IUsbTargetValidator _targetValidator;
+		private readonly IUsbMediaOperationCoordinator _operationCoordinator;
 		private readonly ILogger<OsImageDeployControlService> _logger;
 
 		public OsImageDeployControlService(
 			IUsbTargetDiscovery targetDiscovery,
 			IUsbTargetValidator targetValidator,
+			IUsbMediaOperationCoordinator operationCoordinator,
 			ILogger<OsImageDeployControlService> logger)
 		{
 			_targetDiscovery = targetDiscovery;
 			_targetValidator = targetValidator;
+			_operationCoordinator = operationCoordinator;
 			_logger = logger;
 		}
 
@@ -37,7 +40,7 @@ namespace OSImageDeploy.Service.Services
 					ServiceName = GrpcTransportDefaults.ServiceName,
 					ServiceVersion = version?.ToString() ?? "Unknown",
 					ApiVersion = GrpcTransportDefaults.ApiVersion,
-					ReadOnly = true
+					ReadOnly = false
 				});
 		}
 
@@ -146,6 +149,191 @@ namespace OSImageDeploy.Service.Services
 					new Status(
 						StatusCode.Internal,
 						"USB target validation failed."));
+			}
+		}
+
+		public override async Task<UsbMediaOperationUpdate> StartUsbMediaBuild(
+			StartUsbMediaBuildRequest request,
+			ServerCallContext context)
+		{
+			if (!request.DestructiveActionConfirmed)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						"Explicit destructive-action confirmation is required."));
+			}
+
+			if (request.SelectedTarget == null ||
+				String.IsNullOrWhiteSpace(request.SelectedTarget.TargetId))
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						"A selected USB target identity is required."));
+			}
+
+			UsbTargetDescriptor selectedTarget =
+				GrpcTargetMapper.ToDescriptor(request.SelectedTarget);
+
+			UsbTargetValidationResult validation =
+				await _targetValidator.ValidateTargetAsync(
+					selectedTarget,
+					context.CancellationToken);
+
+			if (!validation.IsValid)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.FailedPrecondition,
+						validation.Summary));
+			}
+
+			context.CancellationToken.ThrowIfCancellationRequested();
+
+			try
+			{
+				UsbMediaOperationSnapshot operation =
+					_operationCoordinator.Start(
+						new UsbMediaBuildRequest
+						{
+							Target = selectedTarget,
+							RebuildWinPeCache = request.RebuildWinPeCache,
+							DestructiveActionConfirmed = true
+						});
+
+				_logger.LogWarning(
+					"USB media operation {OperationId} was authorised for target {TargetId}, selected as disk {DiskNumber}.",
+					operation.OperationId,
+					selectedTarget.TargetId,
+					selectedTarget.DiskNumber);
+
+				_ = AuditOperationCompletionAsync(operation.OperationId);
+
+				return GrpcOperationMapper.ToMessage(operation);
+			}
+			catch (InvalidOperationException exception)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.ResourceExhausted,
+						exception.Message));
+			}
+			catch (ArgumentException exception)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						exception.Message));
+			}
+		}
+
+		public override async Task WatchUsbMediaBuild(
+			UsbMediaOperationRequest request,
+			IServerStreamWriter<UsbMediaOperationUpdate> responseStream,
+			ServerCallContext context)
+		{
+			try
+			{
+				await foreach (UsbMediaOperationSnapshot update in
+					_operationCoordinator.WatchAsync(
+						request.OperationId,
+						context.CancellationToken))
+				{
+					await responseStream.WriteAsync(
+						GrpcOperationMapper.ToMessage(update));
+				}
+			}
+			catch (KeyNotFoundException exception)
+			{
+				throw new RpcException(
+					new Status(StatusCode.NotFound, exception.Message));
+			}
+		}
+
+		public override Task<UsbMediaOperationUpdate> GetUsbMediaBuildStatus(
+			UsbMediaOperationRequest request,
+			ServerCallContext context)
+		{
+			return Task.FromResult(
+				GetOperationUpdate(request.OperationId));
+		}
+
+		public override Task<UsbMediaOperationUpdate> CancelUsbMediaBuild(
+			UsbMediaOperationRequest request,
+			ServerCallContext context)
+		{
+			try
+			{
+				UsbMediaOperationSnapshot update =
+					_operationCoordinator.RequestCancellation(
+						request.OperationId);
+
+				_logger.LogWarning(
+					"Cancellation was requested for USB media operation {OperationId}.",
+					request.OperationId);
+
+				return Task.FromResult(
+					GrpcOperationMapper.ToMessage(update));
+			}
+			catch (KeyNotFoundException exception)
+			{
+				throw new RpcException(
+					new Status(StatusCode.NotFound, exception.Message));
+			}
+		}
+
+		private UsbMediaOperationUpdate GetOperationUpdate(String operationId)
+		{
+			try
+			{
+				return GrpcOperationMapper.ToMessage(
+					_operationCoordinator.GetStatus(operationId));
+			}
+			catch (KeyNotFoundException exception)
+			{
+				throw new RpcException(
+					new Status(StatusCode.NotFound, exception.Message));
+			}
+		}
+
+		private async Task AuditOperationCompletionAsync(String operationId)
+		{
+			try
+			{
+				await foreach (UsbMediaOperationSnapshot update in
+					_operationCoordinator.WatchAsync(operationId))
+				{
+					if (!update.IsTerminal)
+					{
+						continue;
+					}
+
+					if (update.State ==
+						OSImageDeploy.Contracts.UsbMediaOperationState.Succeeded)
+					{
+						_logger.LogInformation(
+							"USB media operation {OperationId} completed successfully.",
+							operationId);
+					}
+					else
+					{
+						_logger.LogError(
+							"USB media operation {OperationId} ended in state {State}: {ErrorMessage}",
+							operationId,
+							update.State,
+							update.ErrorMessage);
+					}
+
+					break;
+				}
+			}
+			catch (Exception exception)
+			{
+				_logger.LogError(
+					exception,
+					"Failed to audit USB media operation {OperationId}.",
+					operationId);
 			}
 		}
 	}

@@ -6,7 +6,7 @@ namespace OSImageDeploy.Service.Security
 {
 	public static class PipeSecurityFactory
 	{
-		public static PipeSecurity CreateReadOnlyServiceSecurity()
+		public static PipeSecurity CreateServiceSecurity()
 		{
 			PipeSecurity security = new PipeSecurity();
 			PipeAccessRights clientAccessRights =

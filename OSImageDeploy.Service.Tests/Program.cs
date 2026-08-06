@@ -1,8 +1,11 @@
+using Grpc.Core;
 using Grpc.Net.Client;
 using OSImageDeploy.Client;
 using OSImageDeploy.Contracts;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
+using ContractOperationProgress = OSImageDeploy.Contracts.OperationProgress;
+using ContractOperationState = OSImageDeploy.Contracts.UsbMediaOperationState;
 
 UsbTargetDescriptor original = new UsbTargetDescriptor
 {
@@ -40,6 +43,36 @@ Assert(roundTrip.HealthStatus == original.HealthStatus, "HealthStatus changed.")
 
 Console.WriteLine("PASS: USB target gRPC contract round trip.");
 
+UsbMediaOperationSnapshot operationSnapshot =
+	new UsbMediaOperationSnapshot
+	{
+		OperationId = "operation-contract-round-trip",
+		State = ContractOperationState.Running,
+		Progress = new ContractOperationProgress
+		{
+			Stage = "Testing",
+			Message = "Operation contract progress.",
+			OverallPercent = 42
+		},
+		StartedUtc = DateTimeOffset.UtcNow
+	};
+
+UsbMediaOperationSnapshot operationRoundTrip =
+	GrpcOperationMapper.ToSnapshot(
+		GrpcOperationMapper.ToMessage(operationSnapshot));
+
+Assert(
+	operationRoundTrip.OperationId == operationSnapshot.OperationId,
+	"OperationId changed.");
+Assert(
+	operationRoundTrip.State == operationSnapshot.State,
+	"Operation state changed.");
+Assert(
+	operationRoundTrip.Progress?.OverallPercent == 42,
+	"Operation progress changed.");
+
+Console.WriteLine("PASS: USB media operation gRPC contract round trip.");
+
 if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 {
 	using GrpcChannel channel = NamedPipeGrpcChannelFactory.Create();
@@ -57,9 +90,33 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 	Assert(
 		status.ApiVersion == GrpcTransportDefaults.ApiVersion,
 		"The service returned an unexpected API version.");
-	Assert(status.ReadOnly, "The initial service did not report read-only mode.");
+	Assert(!status.ReadOnly, "The service did not report media-build support.");
 
 	Console.WriteLine("PASS: Live named-pipe service status call.");
+
+	Boolean unconfirmedRequestRejected = false;
+
+	try
+	{
+		await client.StartUsbMediaBuildAsync(
+			new StartUsbMediaBuildRequest
+			{
+				SelectedTarget = GrpcTargetMapper.ToMessage(original),
+				DestructiveActionConfirmed = false
+			},
+			deadline: DateTime.UtcNow.AddSeconds(10));
+	}
+	catch (RpcException exception) when (
+		exception.StatusCode == StatusCode.InvalidArgument)
+	{
+		unconfirmedRequestRejected = true;
+	}
+
+	Assert(
+		unconfirmedRequestRejected,
+		"The service accepted an unconfirmed destructive request.");
+
+	Console.WriteLine("PASS: Live destructive-operation confirmation guard.");
 }
 
 static void Assert(Boolean condition, String message)

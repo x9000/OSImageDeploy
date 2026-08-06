@@ -5,5 +5,7 @@ namespace OSImageDeploy.Contracts
 		public required UsbTargetDescriptor Target { get; init; }
 
 		public Boolean RebuildWinPeCache { get; init; }
+
+		public Boolean DestructiveActionConfirmed { get; init; }
 	}
 }

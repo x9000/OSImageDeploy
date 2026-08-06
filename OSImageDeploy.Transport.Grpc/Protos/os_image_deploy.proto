@@ -8,6 +8,10 @@ service OsImageDeployControl {
 	rpc GetServiceStatus (GetServiceStatusRequest) returns (GetServiceStatusResponse);
 	rpc ListEligibleUsbTargets (ListEligibleUsbTargetsRequest) returns (ListEligibleUsbTargetsResponse);
 	rpc ValidateUsbTarget (ValidateUsbTargetRequest) returns (ValidateUsbTargetResponse);
+	rpc StartUsbMediaBuild (StartUsbMediaBuildRequest) returns (UsbMediaOperationUpdate);
+	rpc WatchUsbMediaBuild (UsbMediaOperationRequest) returns (stream UsbMediaOperationUpdate);
+	rpc GetUsbMediaBuildStatus (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
+	rpc CancelUsbMediaBuild (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
 }
 
 message GetServiceStatusRequest {
@@ -52,4 +56,49 @@ message UsbTarget {
 	bool is_offline = 11;
 	bool is_clustered = 12;
 	uint32 health_status = 13;
+}
+
+message StartUsbMediaBuildRequest {
+	UsbTarget selected_target = 1;
+	bool destructive_action_confirmed = 2;
+	bool rebuild_win_pe_cache = 3;
+}
+
+message UsbMediaOperationRequest {
+	string operation_id = 1;
+}
+
+message UsbMediaOperationUpdate {
+	string operation_id = 1;
+	UsbMediaOperationState state = 2;
+	OperationProgress progress = 3;
+	string error_message = 4;
+	int64 started_unix_time_ms = 5;
+	int64 completed_unix_time_ms = 6;
+}
+
+message OperationProgress {
+	string stage = 1;
+	string message = 2;
+	int32 overall_percent = 3;
+	bool has_overall_percent = 4;
+	int32 stage_percent = 5;
+	bool has_stage_percent = 6;
+	OperationLogLevel log_level = 7;
+}
+
+enum UsbMediaOperationState {
+	USB_MEDIA_OPERATION_STATE_PENDING = 0;
+	USB_MEDIA_OPERATION_STATE_RUNNING = 1;
+	USB_MEDIA_OPERATION_STATE_CANCELLATION_REQUESTED = 2;
+	USB_MEDIA_OPERATION_STATE_SUCCEEDED = 3;
+	USB_MEDIA_OPERATION_STATE_FAILED = 4;
+	USB_MEDIA_OPERATION_STATE_CANCELLED = 5;
+}
+
+enum OperationLogLevel {
+	OPERATION_LOG_LEVEL_DEBUG = 0;
+	OPERATION_LOG_LEVEL_INFORMATION = 1;
+	OPERATION_LOG_LEVEL_WARNING = 2;
+	OPERATION_LOG_LEVEL_ERROR = 3;
 }

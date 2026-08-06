@@ -20,4 +20,44 @@
 		<ProjectReference Include="..\OSImageDeploy.Transport.Grpc\OSImageDeploy.Transport.Grpc.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<None Include="..\OSImageDeploy\DellPEDrivers.zip"
+			Link="DellPEDrivers.zip"
+			CopyToOutputDirectory="PreserveNewest"
+			CopyToPublishDirectory="PreserveNewest" />
+		<None Include="..\OSImageDeploy\HPPEDrivers.zip"
+			Link="HPPEDrivers.zip"
+			CopyToOutputDirectory="PreserveNewest"
+			CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<CodeSigningCertificateThumbprint>F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907</CodeSigningCertificateThumbprint>
+		<SigningScriptPath>$(MSBuildThisFileDirectory)..\Build\Sign-File.ps1</SigningScriptPath>
+		<EnableCodeSigning Condition="'$(EnableCodeSigning)' == ''">true</EnableCodeSigning>
+	</PropertyGroup>
+
+	<Target Name="SignBuildOutput" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(EnableCodeSigning)' == 'true'">
+		<ItemGroup>
+			<FilesToSign Include="$(TargetPath)" />
+			<FilesToSign Include="$(TargetDir)$(AssemblyName).exe" Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Contracts.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Contracts.dll')" />
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Engine.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Engine.dll')" />
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Platform.Windows.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Platform.Windows.dll')" />
+			<FilesToSign Include="$(TargetDir)OSImageDeploy.Transport.Grpc.dll" Condition="Exists('$(TargetDir)OSImageDeploy.Transport.Grpc.dll')" />
+			<FilesToSign Include="$(TargetDir)Utilities.dll" Condition="Exists('$(TargetDir)Utilities.dll')" />
+		</ItemGroup>
+
+		<Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(SigningScriptPath)&quot; -FilePath &quot;%(FilesToSign.FullPath)&quot; -CertificateThumbprint &quot;$(CodeSigningCertificateThumbprint)&quot;" />
+	</Target>
+
+	<Target Name="SignPublishOutput" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release' and '$(EnableCodeSigning)' == 'true'">
+		<ItemGroup>
+			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).dll" Condition="Exists('$(PublishDir)$(AssemblyName).dll')" />
+			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).exe" Condition="Exists('$(PublishDir)$(AssemblyName).exe')" />
+		</ItemGroup>
+
+		<Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(SigningScriptPath)&quot; -FilePath &quot;%(PublishedFilesToSign.FullPath)&quot; -CertificateThumbprint &quot;$(CodeSigningCertificateThumbprint)&quot;" />
+	</Target>
+
 </Project>

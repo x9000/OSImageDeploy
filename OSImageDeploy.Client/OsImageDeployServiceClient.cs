@@ -4,6 +4,7 @@ using OSImageDeploy.Contracts;
 using OSImageDeploy.Engine;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
+using System.Runtime.CompilerServices;
 
 namespace OSImageDeploy.Client
 {
@@ -77,6 +78,140 @@ namespace OSImageDeploy.Client
 						? null
 						: GrpcTargetMapper.ToDescriptor(response.ResolvedTarget)
 				};
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
+		public async Task<UsbMediaOperationSnapshot> StartUsbMediaBuildAsync(
+			UsbMediaBuildRequest request,
+			CancellationToken cancellationToken = default)
+		{
+			ArgumentNullException.ThrowIfNull(request);
+
+			try
+			{
+				UsbMediaOperationUpdate response =
+					await _client.StartUsbMediaBuildAsync(
+						new StartUsbMediaBuildRequest
+						{
+							SelectedTarget =
+								GrpcTargetMapper.ToMessage(request.Target),
+							DestructiveActionConfirmed =
+								request.DestructiveActionConfirmed,
+							RebuildWinPeCache = request.RebuildWinPeCache
+						},
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				return GrpcOperationMapper.ToSnapshot(response);
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
+		public async IAsyncEnumerable<UsbMediaOperationSnapshot>
+			WatchUsbMediaBuildAsync(
+				String operationId,
+				[EnumeratorCancellation]
+				CancellationToken cancellationToken = default)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
+
+			AsyncServerStreamingCall<UsbMediaOperationUpdate>? call = null;
+
+			try
+			{
+				call = _client.WatchUsbMediaBuild(
+					new UsbMediaOperationRequest
+					{
+						OperationId = operationId
+					},
+					cancellationToken: cancellationToken);
+
+				while (true)
+				{
+					Boolean hasNext;
+					UsbMediaOperationUpdate? update = null;
+
+					try
+					{
+						hasNext = await call.ResponseStream.MoveNext(
+							cancellationToken);
+
+						if (hasNext)
+						{
+							update = call.ResponseStream.Current;
+						}
+					}
+					catch (RpcException exception)
+					{
+						throw TranslateException(
+							exception,
+							cancellationToken);
+					}
+
+					if (!hasNext)
+					{
+						yield break;
+					}
+
+					yield return GrpcOperationMapper.ToSnapshot(update!);
+				}
+			}
+			finally
+			{
+				call?.Dispose();
+			}
+		}
+
+		public async Task<UsbMediaOperationSnapshot> GetUsbMediaBuildStatusAsync(
+			String operationId,
+			CancellationToken cancellationToken = default)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
+
+			try
+			{
+				UsbMediaOperationUpdate response =
+					await _client.GetUsbMediaBuildStatusAsync(
+						new UsbMediaOperationRequest
+						{
+							OperationId = operationId
+						},
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				return GrpcOperationMapper.ToSnapshot(response);
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
+		public async Task<UsbMediaOperationSnapshot> CancelUsbMediaBuildAsync(
+			String operationId,
+			CancellationToken cancellationToken = default)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
+
+			try
+			{
+				UsbMediaOperationUpdate response =
+					await _client.CancelUsbMediaBuildAsync(
+						new UsbMediaOperationRequest
+						{
+							OperationId = operationId
+						},
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				return GrpcOperationMapper.ToSnapshot(response);
 			}
 			catch (RpcException exception)
 			{

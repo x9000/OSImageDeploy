@@ -13,6 +13,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\OSImageDeploy.Contracts\OSImageDeploy.Contracts.csproj" />
 		<ProjectReference Include="..\OSImageDeploy.Engine\OSImageDeploy.Engine.csproj" />
+		<ProjectReference Include="..\Utilities\Utilities.csproj" />
 	</ItemGroup>
 
 </Project>

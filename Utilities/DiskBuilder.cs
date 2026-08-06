@@ -141,19 +141,44 @@ namespace Utilities
 
 		public Task PrepareDiskAsync(uint diskNumber, CancellationToken cancellationToken = default)
 		{
+			return PrepareDiskAsync(
+				_ => Task.FromResult(diskNumber),
+				cancellationToken);
+		}
+
+		public Task PrepareDiskAsync(
+			Func<CancellationToken, Task<UInt32>> resolveDiskNumberAsync,
+			CancellationToken cancellationToken = default)
+		{
+			ArgumentNullException.ThrowIfNull(resolveDiskNumberAsync);
+
 			ResetOverallProgress();
-			OnPhaseProgress(DiskBuildPhase.Cleanup, $"Preparing disk number {diskNumber}.",	0);
+			OnPhaseProgress(
+				DiskBuildPhase.Cleanup,
+				"Preparing the selected USB target.",
+				0);
 
 			return Task.Run(async () =>
 			{
 				cancellationToken.ThrowIfCancellationRequested();
-				await PrepareDisk(diskNumber);
+				await PrepareDisk(
+					resolveDiskNumberAsync,
+					cancellationToken);
 			}, cancellationToken);
 		}
 
 
 
-		public async Task PrepareDisk(uint diskNumber)
+		public Task PrepareDisk(uint diskNumber)
+		{
+			return PrepareDisk(
+				_ => Task.FromResult(diskNumber),
+				CancellationToken.None);
+		}
+
+		private async Task PrepareDisk(
+			Func<CancellationToken, Task<UInt32>> resolveDiskNumberAsync,
+			CancellationToken cancellationToken)
 		{
 			OnPhaseProgress(
 	DiskBuildPhase.Cleanup,
@@ -161,11 +186,17 @@ namespace Utilities
 	0);
 
 			DeleteAbandonedTemporaryFolders();
+			cancellationToken.ThrowIfCancellationRequested();
 
 			OnPhaseProgress(
 				DiskBuildPhase.Cleanup,
 				"Temporary folder cleanup complete.",
 				100);
+
+			UInt32 diskNumber =
+				await resolveDiskNumberAsync(cancellationToken);
+
+			cancellationToken.ThrowIfCancellationRequested();
 
 			using CimSession session = CimSession.Create(null);
 
@@ -177,7 +208,7 @@ namespace Utilities
 				["IsReadOnly"] = false
 			}, ignoreErrors: false);
 
-
+			cancellationToken.ThrowIfCancellationRequested();
 
 			OnPhaseProgress(DiskBuildPhase.DiskPreparation,	"Initialising disk.", 20);
 			Invoke(session, disk, "Initialize", new()
@@ -192,6 +223,8 @@ namespace Utilities
 				["RemoveOEM"] = false,
 				["ZeroOutEntireDisk"] = false
 			}, ignoreErrors: true);
+
+			cancellationToken.ThrowIfCancellationRequested();
 
 			disk = GetDisk(session, diskNumber);
 
@@ -215,6 +248,7 @@ namespace Utilities
 			CimInstance dataPartition = CreatePartition(session, disk, sizeBytes: null,	useMaximumSize: true);
 			FormatPartition(session, dataPartition, "NTFS", "BuildData");
 			OnPhaseProgress(DiskBuildPhase.DiskPreparation,	"Disk preparation complete.", 100);
+			cancellationToken.ThrowIfCancellationRequested();
 
 			////Restore Autoplay settings
 			//autoplayKey.SetValue("", currentAutoPlayOnStorageSetting, RegistryValueKind.String);
@@ -224,11 +258,13 @@ namespace Utilities
 			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\DriverPacks");
 			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\WindowsImages");
 
-			WinPeBuildResult buildResult = await BuildWinPeMediaAsync();
+			WinPeBuildResult buildResult =
+				await BuildWinPeMediaAsync(cancellationToken);
 
 			try
 			{
 				OnPhaseProgress(DiskBuildPhase.CopyingBootMedia, "Copying WinPE environment to the USB drive.",	0);
+				cancellationToken.ThrowIfCancellationRequested();
 
 				FSManager.CopyDirectory(
 					buildResult.MediaFolder,
@@ -310,8 +346,11 @@ namespace Utilities
 			}
 		}
 
-		private async Task<WinPeBuildResult> BuildWinPeMediaAsync()
+		private async Task<WinPeBuildResult> BuildWinPeMediaAsync(
+			CancellationToken cancellationToken)
 		{
+			cancellationToken.ThrowIfCancellationRequested();
+
 			Stopwatch operationStopwatch =
 				Stopwatch.StartNew();
 
@@ -329,7 +368,9 @@ namespace Utilities
 				await BuildWinPeCacheManifestAsync(
 					environment);
 
-			if (await cacheManager.IsValidAsync(expectedManifest))
+			if (await cacheManager.IsValidAsync(
+				expectedManifest,
+				cancellationToken))
 			{
 				OnPhaseProgress(DiskBuildPhase.CachedWinPeRestore, "Valid WinPE cache found.", 5);
 
@@ -347,7 +388,8 @@ namespace Utilities
 
 				OnPhaseProgress(DiskBuildPhase.CachedWinPeRestore, "Extracting cached WinPE environment.", 20);
 				await cacheManager.ExtractAsync(
-					cachedMediaFolder);
+					cachedMediaFolder,
+					cancellationToken);
 				OnPhaseProgress(DiskBuildPhase.CachedWinPeRestore, "Cached WinPE environment restored.", 100);
 
 				operationStopwatch.Stop();
@@ -385,6 +427,7 @@ namespace Utilities
 			Directory.CreateDirectory(sourcesFolder);
 			Directory.CreateDirectory(driverFolder);
 			Directory.CreateDirectory(mountFolder);
+			cancellationToken.ThrowIfCancellationRequested();
 
 			String adkMediaFolder =	environment.MediaFolder;
 
@@ -414,7 +457,10 @@ namespace Utilities
 				await service.MountForServicingAsync(
 					bootWimPath,
 					1,
-					mountFolder);
+					mountFolder,
+					cancellationToken: cancellationToken);
+
+			cancellationToken.ThrowIfCancellationRequested();
 
 			ZipFile.ExtractToDirectory(
 				Path.Combine(
@@ -434,6 +480,8 @@ namespace Utilities
 				packageIndex < packages.Length;
 				packageIndex++)
 			{
+				cancellationToken.ThrowIfCancellationRequested();
+
 				String package = packages[packageIndex];
 
 				Double packageProgress = 15 + ((packageIndex + 1D) / packages.Length * 35D);
@@ -484,15 +532,20 @@ namespace Utilities
 				true,
 				false);
 
+			cancellationToken.ThrowIfCancellationRequested();
+
 			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	"Committing and dismounting Boot.wim.",	75);
 
-			await wimSession.UnmountAsync(commit: true);
+			await wimSession.UnmountAsync(
+				commit: true,
+				cancellationToken);
 
 			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	"Creating WinPE media cache.", 90);
 
 			await cacheManager.CreateAsync(
 				mediaFolder,
-				expectedManifest);
+				expectedManifest,
+				cancellationToken);
 
 			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	"WinPE environment is ready.", 100);
 

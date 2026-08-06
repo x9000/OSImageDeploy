@@ -107,6 +107,10 @@
                         </StackPanel>
 
                     </Button>
+                    <Button Content="Cancel USB Creation"
+                            Margin="0,5,0,5"
+                            Command="{Binding CancelUSBCommand, Mode=OneWay}"
+                            IsEnabled="{Binding CancelUSBButtonEnabled}"/>
                     <Button x:Name="RefreshUSBButton" Margin="0,5,0,5" Command="{Binding RefreshUSBButtonCommand, Mode=OneWay}" IsEnabled="{Binding RefreshUSBButtonEnabled}">
                         Refresh USB List
                     </Button>

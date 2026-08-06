@@ -9,7 +9,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseWindowsService(options =>
 {
-	options.ServiceName = GrpcTransportDefaults.ServiceName;
+	options.ServiceName = GrpcTransportDefaults.WindowsServiceName;
 });
 
 builder.WebHost.ConfigureKestrel(options =>
@@ -30,7 +30,7 @@ builder.WebHost.UseNamedPipes(options =>
 	options.ListenerQueueCount = 2;
 	options.MaxReadBufferSize = 64 * 1024;
 	options.MaxWriteBufferSize = 256 * 1024;
-	options.PipeSecurity = PipeSecurityFactory.CreateReadOnlyServiceSecurity();
+	options.PipeSecurity = PipeSecurityFactory.CreateServiceSecurity();
 });
 
 builder.Services.AddGrpc(options =>
@@ -45,6 +45,12 @@ builder.Services.AddSingleton<IUsbTargetDiscovery>(services =>
 	services.GetRequiredService<WindowsUsbTargetProvider>());
 builder.Services.AddSingleton<IUsbTargetValidator>(services =>
 	services.GetRequiredService<WindowsUsbTargetProvider>());
+builder.Services.AddSingleton<WindowsUsbMediaWorkflow>();
+builder.Services.AddSingleton<IUsbMediaWorkflow>(services =>
+	services.GetRequiredService<WindowsUsbMediaWorkflow>());
+builder.Services.AddSingleton<IUsbMediaOperationCoordinator>(services =>
+	new UsbMediaOperationCoordinator(
+		services.GetRequiredService<IUsbMediaWorkflow>()));
 
 WebApplication app = builder.Build();
 

@@ -6,6 +6,8 @@ namespace OSImageDeploy.Transport.Grpc
 
 		public const String ServiceName = "OS Image Deploy Service";
 
+		public const String WindowsServiceName = "OSImageDeploy.Service";
+
 		public const String ApiVersion = "1.0";
 	}
 }

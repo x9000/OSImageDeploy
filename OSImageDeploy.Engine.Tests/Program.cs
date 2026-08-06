@@ -32,8 +32,31 @@ foreach ((String name, Action test) in tests)
 	}
 }
 
+List<(String Name, Func<Task> Test)> asyncTests = new()
+{
+	("Unconfirmed media operation is rejected", UnconfirmedOperationIsRejected),
+	("Media operation completes with progress", OperationCompletesWithProgress),
+	("Concurrent media operation is rejected", ConcurrentOperationIsRejected),
+	("Media operation cancellation is recorded", OperationCancellationIsRecorded)
+};
+
+foreach ((String name, Func<Task> test) in asyncTests)
+{
+	try
+	{
+		await test();
+		Console.WriteLine($"PASS: {name}");
+	}
+	catch (Exception exception)
+	{
+		failures.Add($"{name}: {exception.Message}");
+		Console.WriteLine($"FAIL: {name} - {exception.Message}");
+	}
+}
+
 Console.WriteLine();
-Console.WriteLine($"{tests.Count - failures.Count}/{tests.Count} checks passed.");
+Int32 totalChecks = tests.Count + asyncTests.Count;
+Console.WriteLine($"{totalChecks - failures.Count}/{totalChecks} checks passed.");
 
 if (failures.Count > 0)
 {
@@ -118,6 +141,171 @@ static void ReassignedDiskNumberIsAccepted()
 		"The service-resolved disk number was not returned.");
 }
 
+static Task UnconfirmedOperationIsRejected()
+{
+	using UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(new FakeUsbMediaWorkflow());
+
+	Boolean rejected = false;
+
+	try
+	{
+		coordinator.Start(CreateBuildRequest(confirmed: false));
+	}
+	catch (ArgumentException)
+	{
+		rejected = true;
+	}
+
+	Assert(rejected, "An unconfirmed destructive operation was accepted.");
+
+	return Task.CompletedTask;
+}
+
+static async Task OperationCompletesWithProgress()
+{
+	FakeUsbMediaWorkflow workflow = new FakeUsbMediaWorkflow
+	{
+		CreateHandler = (request, progress, cancellationToken) =>
+		{
+			progress.Report(
+				new OperationProgress
+				{
+					Stage = "Test",
+					Message = "Fake workflow progress.",
+					OverallPercent = 50
+				});
+
+			return Task.CompletedTask;
+		}
+	};
+
+	using UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(workflow);
+
+	UsbMediaOperationSnapshot started =
+		coordinator.Start(CreateBuildRequest());
+
+	List<UsbMediaOperationSnapshot> updates =
+		await ReadUntilTerminalAsync(coordinator, started.OperationId);
+
+	Assert(
+		updates.Any(update => update.Progress?.OverallPercent == 50),
+		"The workflow progress update was not recorded.");
+	Assert(
+		updates[^1].State == UsbMediaOperationState.Succeeded,
+		"The completed workflow was not marked as successful.");
+}
+
+static async Task ConcurrentOperationIsRejected()
+{
+	TaskCompletionSource enteredWorkflow =
+		new TaskCompletionSource(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+
+	FakeUsbMediaWorkflow workflow = new FakeUsbMediaWorkflow
+	{
+		CreateHandler = async (request, progress, cancellationToken) =>
+		{
+			enteredWorkflow.TrySetResult();
+			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+		}
+	};
+
+	using UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(workflow);
+
+	UsbMediaOperationSnapshot first =
+		coordinator.Start(CreateBuildRequest());
+
+	await enteredWorkflow.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+	Boolean rejected = false;
+
+	try
+	{
+		coordinator.Start(CreateBuildRequest());
+	}
+	catch (InvalidOperationException)
+	{
+		rejected = true;
+	}
+
+	Assert(rejected, "A concurrent destructive operation was accepted.");
+
+	coordinator.RequestCancellation(first.OperationId);
+	await ReadUntilTerminalAsync(coordinator, first.OperationId);
+}
+
+static async Task OperationCancellationIsRecorded()
+{
+	TaskCompletionSource enteredWorkflow =
+		new TaskCompletionSource(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+
+	FakeUsbMediaWorkflow workflow = new FakeUsbMediaWorkflow
+	{
+		CreateHandler = async (request, progress, cancellationToken) =>
+		{
+			enteredWorkflow.TrySetResult();
+			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+		}
+	};
+
+	using UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(workflow);
+
+	UsbMediaOperationSnapshot started =
+		coordinator.Start(CreateBuildRequest());
+
+	await enteredWorkflow.Task.WaitAsync(TimeSpan.FromSeconds(5));
+	coordinator.RequestCancellation(started.OperationId);
+
+	List<UsbMediaOperationSnapshot> updates =
+		await ReadUntilTerminalAsync(coordinator, started.OperationId);
+
+	Assert(
+		updates.Any(update =>
+			update.State == UsbMediaOperationState.CancellationRequested),
+		"The cancellation request was not recorded.");
+	Assert(
+		updates[^1].State == UsbMediaOperationState.Cancelled,
+		"The cancelled workflow was not marked as cancelled.");
+}
+
+static UsbMediaBuildRequest CreateBuildRequest(Boolean confirmed = true)
+{
+	return new UsbMediaBuildRequest
+	{
+		Target = CreateTarget(),
+		DestructiveActionConfirmed = confirmed
+	};
+}
+
+static async Task<List<UsbMediaOperationSnapshot>> ReadUntilTerminalAsync(
+	IUsbMediaOperationCoordinator coordinator,
+	String operationId)
+{
+	using CancellationTokenSource timeout =
+		new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+	List<UsbMediaOperationSnapshot> updates =
+		new List<UsbMediaOperationSnapshot>();
+
+	await foreach (UsbMediaOperationSnapshot update in
+		coordinator.WatchAsync(operationId, timeout.Token))
+	{
+		updates.Add(update);
+
+		if (update.IsTerminal)
+		{
+			break;
+		}
+	}
+
+	return updates;
+}
+
 static void AssertRejected(
 	UsbTargetDescriptor expected,
 	UsbTargetDescriptor current,
@@ -170,5 +358,43 @@ static void Assert(Boolean condition, String message)
 	if (!condition)
 	{
 		throw new InvalidOperationException(message);
+	}
+}
+
+sealed class FakeUsbMediaWorkflow : IUsbMediaWorkflow
+{
+	public Func<
+		UsbMediaBuildRequest,
+		IProgress<OperationProgress>,
+		CancellationToken,
+		Task> CreateHandler { get; init; } =
+			(request, progress, cancellationToken) => Task.CompletedTask;
+
+	public Task CreateUsbMediaAsync(
+		UsbMediaBuildRequest request,
+		IProgress<OperationProgress> progress,
+		CancellationToken cancellationToken = default)
+	{
+		return CreateHandler(request, progress, cancellationToken);
+	}
+
+	public Task<IReadOnlyList<UsbTargetDescriptor>> GetEligibleTargetsAsync(
+		CancellationToken cancellationToken = default)
+	{
+		return Task.FromResult<IReadOnlyList<UsbTargetDescriptor>>(
+			Array.Empty<UsbTargetDescriptor>());
+	}
+
+	public Task<UsbTargetValidationResult> ValidateTargetAsync(
+		UsbTargetDescriptor target,
+		CancellationToken cancellationToken = default)
+	{
+		return Task.FromResult(
+			new UsbTargetValidationResult
+			{
+				IsValid = true,
+				Summary = "Fake target is valid.",
+				ResolvedTarget = target
+			});
 	}
 }
