@@ -538,6 +538,12 @@ namespace ViewModels
 
 				await WatchUsbMediaOperationAsync(operation);
 			}
+			catch (UsbMediaOperationFailedException exception)
+			{
+				HandleUsbOperationTerminalFailure(
+					"The reconnected USB media operation failed.",
+					exception);
+			}
 			catch (Exception exception) when (
 				String.IsNullOrWhiteSpace(_activeOperationId))
 			{
@@ -618,6 +624,12 @@ namespace ViewModels
 				SetUsbOperationControls(operation);
 				await WatchUsbMediaOperationAsync(operation);
 			}
+			catch (UsbMediaOperationFailedException exception)
+			{
+				HandleUsbOperationTerminalFailure(
+					$"USB creation failed for target {selectedTarget.TargetId}.",
+					exception);
+			}
 			catch (Exception exception)
 			{
 				HandleUsbOperationFailure(
@@ -661,7 +673,7 @@ namespace ViewModels
 
 				if (update.State == UsbMediaOperationState.Failed)
 				{
-					throw new InvalidOperationException(
+					throw new UsbMediaOperationFailedException(
 						String.IsNullOrWhiteSpace(update.ErrorMessage)
 							? "The service could not create the USB media."
 							: update.ErrorMessage);
@@ -673,6 +685,28 @@ namespace ViewModels
 					return;
 				}
 			}
+		}
+
+		private void HandleUsbOperationTerminalFailure(
+			String logMessage,
+			Exception exception)
+		{
+			InfoTextBlockText = "USB creation failed.";
+			SubInfoTextBlockText = "";
+
+			AppLog.Error(logMessage, exception);
+
+			MessageBox.Show(
+				"The service reported that USB media creation failed." +
+				Environment.NewLine +
+				Environment.NewLine +
+				exception.Message +
+				Environment.NewLine +
+				Environment.NewLine +
+				"The operation has stopped. Inspect the target before retrying.",
+				"USB Creation Failed",
+				MessageBoxButton.OK,
+				MessageBoxImage.Error);
 		}
 
 		private void HandleUsbOperationFailure(
@@ -808,5 +842,13 @@ namespace ViewModels
 		}
 
 		#endregion
+
+		private sealed class UsbMediaOperationFailedException : Exception
+		{
+			public UsbMediaOperationFailedException(String message)
+				: base(message)
+			{
+			}
+		}
 	}
 }

@@ -6,6 +6,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<OutputType>Exe</OutputType>
 		<PlatformTarget>x64</PlatformTarget>
+		<WinPeClientProject>$(MSBuildProjectDirectory)\..\OSImageDeployClient\OSImageDeployClient.csproj</WinPeClientProject>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -58,6 +59,19 @@
 		</ItemGroup>
 
 		<Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(SigningScriptPath)&quot; -FilePath &quot;%(PublishedFilesToSign.FullPath)&quot; -CertificateThumbprint &quot;$(CodeSigningCertificateThumbprint)&quot;" />
+	</Target>
+
+	<Target
+		Name="PublishWinPeClientForDevelopment"
+		AfterTargets="Build"
+		Condition="'$(Configuration)' == 'Debug' and '$(DesignTimeBuild)' != 'true'">
+
+		<RemoveDir Directories="$(TargetDir)WinPEClient" />
+
+		<MSBuild
+			Projects="$(WinPeClientProject)"
+			Targets="Restore;Publish"
+			Properties="Configuration=Release;PublishProfile=FolderProfile1;RuntimeIdentifier=win-x64;PublishDir=$(TargetDir)WinPEClient;EnableCodeSigning=false;BuildTimestampUtc=$(BuildTimestampUtc);BuildVersion=$(BuildVersion);BuildInformationalVersion=$(BuildInformationalVersion)" />
 	</Target>
 
 </Project>

@@ -14,8 +14,23 @@ namespace Utilities
 	public sealed class DiskBuilder
 	{
 		private readonly Object _progressLock = new Object();
+		private readonly Func<CancellationToken, Task<WinPeBuildResult>>
+			_buildWinPeMediaAsync;
 
 		private Int32 _lastOverallProgress;
+
+		public DiskBuilder()
+		{
+			_buildWinPeMediaAsync = BuildWinPeMediaAsync;
+		}
+
+		internal DiskBuilder(
+			Func<CancellationToken, Task<WinPeBuildResult>>
+				buildWinPeMediaAsync)
+		{
+			_buildWinPeMediaAsync = buildWinPeMediaAsync ??
+				throw new ArgumentNullException(nameof(buildWinPeMediaAsync));
+		}
 		private enum DiskBuildPhase
 		{
 			Cleanup,
@@ -45,25 +60,25 @@ namespace Utilities
 					break;
 
 				case DiskBuildPhase.DiskPreparation:
-					rangeStart = 2;
-					rangeEnd = 20;
+					rangeStart = 70;
+					rangeEnd = 85;
 					stage = "Preparing Disk";
 					break;
 
 				case DiskBuildPhase.FreshWinPeBuild:
-					rangeStart = 20;
-					rangeEnd = 82;
+					rangeStart = 2;
+					rangeEnd = 70;
 					stage = "Building WinPE";
 					break;
 
 				case DiskBuildPhase.CachedWinPeRestore:
-					rangeStart = 20;
-					rangeEnd = 55;
+					rangeStart = 2;
+					rangeEnd = 70;
 					stage = "Restoring WinPE Cache";
 					break;
 
 				case DiskBuildPhase.CopyingBootMedia:
-					rangeStart = 82;
+					rangeStart = 85;
 					rangeEnd = 99;
 					stage = "Copying Boot Media";
 					break;
@@ -181,9 +196,9 @@ namespace Utilities
 			CancellationToken cancellationToken)
 		{
 			OnPhaseProgress(
-	DiskBuildPhase.Cleanup,
-	"Removing temporary WinPE working folders.",
-	0);
+				DiskBuildPhase.Cleanup,
+				"Removing temporary WinPE working folders.",
+				0);
 
 			DeleteAbandonedTemporaryFolders();
 			cancellationToken.ThrowIfCancellationRequested();
@@ -193,76 +208,106 @@ namespace Utilities
 				"Temporary folder cleanup complete.",
 				100);
 
-			UInt32 diskNumber =
-				await resolveDiskNumberAsync(cancellationToken);
-
-			cancellationToken.ThrowIfCancellationRequested();
-
-			using CimSession session = CimSession.Create(null);
-
-			CimInstance disk = GetDisk(session, diskNumber);
-			OnPhaseProgress(DiskBuildPhase.DiskPreparation,	"Setting disk to be read/write.", 10);
-			// Equivalent to: Set-Disk -IsReadOnly $false
-			Invoke(session, disk, "SetAttributes", new()
-			{
-				["IsReadOnly"] = false
-			}, ignoreErrors: false);
-
-			cancellationToken.ThrowIfCancellationRequested();
-
-			OnPhaseProgress(DiskBuildPhase.DiskPreparation,	"Initialising disk.", 20);
-			Invoke(session, disk, "Initialize", new()
-			{
-				["PartitionStyle"] = (ushort)2 // GPT
-			}, ignoreErrors: true);
-
-			OnPhaseProgress(DiskBuildPhase.DiskPreparation, "Clearing disk.", 35);
-			Invoke(session, disk, "Clear", new()
-			{
-				["RemoveData"] = true,
-				["RemoveOEM"] = false,
-				["ZeroOutEntireDisk"] = false
-			}, ignoreErrors: true);
-
-			cancellationToken.ThrowIfCancellationRequested();
-
-			disk = GetDisk(session, diskNumber);
-
-			Invoke(session, disk, "Initialize", new()
-			{
-				["PartitionStyle"] = (ushort)2 // GPT
-			}, ignoreErrors: true);
-
-			disk = GetDisk(session, diskNumber);
-
-			OnPhaseProgress(DiskBuildPhase.DiskPreparation, "Creating bootable FAT32 partition.", 60);
-			CimInstance winPePartition = CreatePartition(session, disk,	sizeBytes: 4UL * 1024 * 1024 * 1024, useMaximumSize: false);
-			String winPEPartitionDriveLetter = Convert.ToString(winPePartition.CimInstanceProperties["DriveLetter"].Value) ?? "";
-
-			FormatPartition(session, winPePartition, "FAT32", "WinPE");
-
-			disk = GetDisk(session, diskNumber);
-
-			// New-Partition -UseMaximumSize -AssignDriveLetter
-			OnPhaseProgress(DiskBuildPhase.DiskPreparation, "Creating NTFS data partition.", 80);
-			CimInstance dataPartition = CreatePartition(session, disk, sizeBytes: null,	useMaximumSize: true);
-			FormatPartition(session, dataPartition, "NTFS", "BuildData");
-			OnPhaseProgress(DiskBuildPhase.DiskPreparation,	"Disk preparation complete.", 100);
-			cancellationToken.ThrowIfCancellationRequested();
-
-			////Restore Autoplay settings
-			//autoplayKey.SetValue("", currentAutoPlayOnStorageSetting, RegistryValueKind.String);
-
-
-			String dataPartitionDriveLetter = Convert.ToString(dataPartition.CimInstanceProperties["DriveLetter"].Value) ?? "";
-			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\DriverPacks");
-			Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\WindowsImages");
-
 			WinPeBuildResult buildResult =
-				await BuildWinPeMediaAsync(cancellationToken);
+				await _buildWinPeMediaAsync(cancellationToken);
 
 			try
 			{
+				UInt32 diskNumber =
+					await resolveDiskNumberAsync(cancellationToken);
+
+				cancellationToken.ThrowIfCancellationRequested();
+
+				using CimSession session = CimSession.Create(null);
+
+				CimInstance disk = GetDisk(session, diskNumber);
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Setting disk to be read/write.",
+					10);
+
+				Invoke(session, disk, "SetAttributes", new()
+				{
+					["IsReadOnly"] = false
+				}, ignoreErrors: false);
+
+				cancellationToken.ThrowIfCancellationRequested();
+
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Initialising disk.",
+					20);
+
+				Invoke(session, disk, "Initialize", new()
+				{
+					["PartitionStyle"] = (ushort)2 // GPT
+				}, ignoreErrors: true);
+
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Clearing disk.",
+					35);
+
+				Invoke(session, disk, "Clear", new()
+				{
+					["RemoveData"] = true,
+					["RemoveOEM"] = false,
+					["ZeroOutEntireDisk"] = false
+				}, ignoreErrors: true);
+
+				cancellationToken.ThrowIfCancellationRequested();
+
+				disk = GetDisk(session, diskNumber);
+
+				Invoke(session, disk, "Initialize", new()
+				{
+					["PartitionStyle"] = (ushort)2 // GPT
+				}, ignoreErrors: true);
+
+				disk = GetDisk(session, diskNumber);
+
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Creating bootable FAT32 partition.",
+					60);
+
+				CimInstance winPePartition = CreatePartition(
+					session,
+					disk,
+					sizeBytes: 4UL * 1024 * 1024 * 1024,
+					useMaximumSize: false);
+
+				String winPEPartitionDriveLetter =
+					Convert.ToString(
+						winPePartition.CimInstanceProperties["DriveLetter"].Value) ?? "";
+
+				FormatPartition(session, winPePartition, "FAT32", "WinPE");
+
+				disk = GetDisk(session, diskNumber);
+
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Creating NTFS data partition.",
+					80);
+
+				CimInstance dataPartition = CreatePartition(
+					session,
+					disk,
+					sizeBytes: null,
+					useMaximumSize: true);
+
+				FormatPartition(session, dataPartition, "NTFS", "BuildData");
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Disk preparation complete.",
+					100);
+
+				cancellationToken.ThrowIfCancellationRequested();
+
+				String dataPartitionDriveLetter = Convert.ToString(dataPartition.CimInstanceProperties["DriveLetter"].Value) ?? "";
+				Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\DriverPacks");
+				Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\WindowsImages");
+
 				OnPhaseProgress(DiskBuildPhase.CopyingBootMedia, "Copying WinPE environment to the USB drive.",	0);
 				cancellationToken.ThrowIfCancellationRequested();
 
@@ -271,14 +316,14 @@ namespace Utilities
 					$"{winPEPartitionDriveLetter}:\\");
 
 				OnPhaseProgress(DiskBuildPhase.CopyingBootMedia, "WinPE environment copied to the USB drive.", 100);
+
+				OnPhaseProgress(DiskBuildPhase.Complete, "USB build complete.",	100);
 			}
 			finally
 			{
 				TryDeleteDirectory(
 					buildResult.WorkingFolder);
 			}
-
-			OnPhaseProgress(DiskBuildPhase.Complete, "USB build complete.",	100);
 		}
 
 		private static void DeleteAbandonedTemporaryFolders()

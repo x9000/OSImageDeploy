@@ -98,6 +98,35 @@ Assert(
 
 Console.WriteLine("PASS: WinPE cache gRPC contract round trip.");
 
+Boolean targetResolverCalled = false;
+Boolean preflightFailureObserved = false;
+DiskBuilder preflightDiskBuilder =
+	new DiskBuilder(
+		_ => Task.FromException<WinPeBuildResult>(
+			new InvalidOperationException("Expected preflight failure.")));
+
+try
+{
+	await preflightDiskBuilder.PrepareDiskAsync(
+		_ =>
+		{
+			targetResolverCalled = true;
+			return Task.FromResult<UInt32>(1);
+		});
+}
+catch (InvalidOperationException exception) when (
+	exception.Message == "Expected preflight failure.")
+{
+	preflightFailureObserved = true;
+}
+
+Assert(preflightFailureObserved, "The injected preflight failure was not observed.");
+Assert(
+	!targetResolverCalled,
+	"The destructive target resolver ran before WinPE preflight completed.");
+
+Console.WriteLine("PASS: WinPE preflight precedes destructive target resolution.");
+
 String cacheTestDirectory = Path.Combine(
 	Path.GetTempPath(),
 	$"OSImageDeploy-cache-test-{Guid.NewGuid():N}");
