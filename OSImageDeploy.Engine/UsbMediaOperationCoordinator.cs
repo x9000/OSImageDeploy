@@ -83,6 +83,22 @@ namespace OSImageDeploy.Engine
 			}
 		}
 
+		public UsbMediaOperationSnapshot? GetActiveOperation()
+		{
+			ObjectDisposedException.ThrowIf(_disposed, this);
+
+			lock (_sync)
+			{
+				if (_activeOperation == null ||
+					_activeOperation.Current.IsTerminal)
+				{
+					return null;
+				}
+
+				return _activeOperation.Current;
+			}
+		}
+
 		public async IAsyncEnumerable<UsbMediaOperationSnapshot> WatchAsync(
 			String operationId,
 			[EnumeratorCancellation] CancellationToken cancellationToken = default)

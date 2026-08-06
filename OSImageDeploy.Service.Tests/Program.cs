@@ -188,6 +188,17 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 
 	Console.WriteLine("PASS: Live destructive-operation confirmation guard.");
 
+	GetActiveUsbMediaBuildResponse activeOperation =
+		await client.GetActiveUsbMediaBuildAsync(
+			new GetActiveUsbMediaBuildRequest(),
+			deadline: DateTime.UtcNow.AddSeconds(10));
+
+	Assert(
+		!activeOperation.HasActiveOperation,
+		"The service reported an active USB operation when none was started.");
+
+	Console.WriteLine("PASS: Live no-active-operation query.");
+
 	await client.GetWinPeCacheStatusAsync(
 		new GetWinPeCacheStatusRequest(),
 		deadline: DateTime.UtcNow.AddSeconds(10));

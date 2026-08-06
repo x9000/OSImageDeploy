@@ -36,6 +36,7 @@ List<(String Name, Func<Task> Test)> asyncTests = new()
 {
 	("Unconfirmed media operation is rejected", UnconfirmedOperationIsRejected),
 	("Media operation completes with progress", OperationCompletesWithProgress),
+	("Active media operation is reported until completion", ActiveOperationIsReportedUntilCompletion),
 	("Concurrent media operation is rejected", ConcurrentOperationIsRejected),
 	("Media operation cancellation is recorded", OperationCancellationIsRecorded)
 };
@@ -235,6 +236,52 @@ static async Task ConcurrentOperationIsRejected()
 
 	coordinator.RequestCancellation(first.OperationId);
 	await ReadUntilTerminalAsync(coordinator, first.OperationId);
+}
+
+static async Task ActiveOperationIsReportedUntilCompletion()
+{
+	TaskCompletionSource enteredWorkflow =
+		new TaskCompletionSource(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+	TaskCompletionSource releaseWorkflow =
+		new TaskCompletionSource(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+
+	FakeUsbMediaWorkflow workflow = new FakeUsbMediaWorkflow
+	{
+		CreateHandler = async (request, progress, cancellationToken) =>
+		{
+			enteredWorkflow.TrySetResult();
+			await releaseWorkflow.Task.WaitAsync(cancellationToken);
+		}
+	};
+
+	using UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(workflow);
+
+	Assert(
+		coordinator.GetActiveOperation() == null,
+		"A new coordinator reported an active operation.");
+
+	UsbMediaOperationSnapshot started =
+		coordinator.Start(CreateBuildRequest());
+
+	await enteredWorkflow.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+	UsbMediaOperationSnapshot? active =
+		coordinator.GetActiveOperation();
+
+	Assert(active != null, "The running operation was not reported as active.");
+	Assert(
+		active!.OperationId == started.OperationId,
+		"The active operation identity changed.");
+
+	releaseWorkflow.TrySetResult();
+	await ReadUntilTerminalAsync(coordinator, started.OperationId);
+
+	Assert(
+		coordinator.GetActiveOperation() == null,
+		"A completed operation was still reported as active.");
 }
 
 static async Task OperationCancellationIsRecorded()

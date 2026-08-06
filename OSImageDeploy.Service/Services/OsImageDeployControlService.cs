@@ -262,6 +262,29 @@ namespace OSImageDeploy.Service.Services
 				GetOperationUpdate(request.OperationId));
 		}
 
+		public override Task<GetActiveUsbMediaBuildResponse>
+			GetActiveUsbMediaBuild(
+				GetActiveUsbMediaBuildRequest request,
+				ServerCallContext context)
+		{
+			UsbMediaOperationSnapshot? operation =
+				_operationCoordinator.GetActiveOperation();
+
+			GetActiveUsbMediaBuildResponse response =
+				new GetActiveUsbMediaBuildResponse
+				{
+					HasActiveOperation = operation != null
+				};
+
+			if (operation != null)
+			{
+				response.Operation =
+					GrpcOperationMapper.ToMessage(operation);
+			}
+
+			return Task.FromResult(response);
+		}
+
 		public override Task<UsbMediaOperationUpdate> CancelUsbMediaBuild(
 			UsbMediaOperationRequest request,
 			ServerCallContext context)

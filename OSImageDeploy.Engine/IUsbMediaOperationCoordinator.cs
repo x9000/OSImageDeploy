@@ -8,6 +8,8 @@ namespace OSImageDeploy.Engine
 
 		UsbMediaOperationSnapshot GetStatus(String operationId);
 
+		UsbMediaOperationSnapshot? GetActiveOperation();
+
 		IAsyncEnumerable<UsbMediaOperationSnapshot> WatchAsync(
 			String operationId,
 			CancellationToken cancellationToken = default);
