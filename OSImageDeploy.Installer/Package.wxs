@@ -1,6 +1,7 @@
 <Wix
 	xmlns="http://wixtoolset.org/schemas/v4/wxs"
-	xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+	xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+	xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
 	<Package
 		Name="OS Image Deployment Suite"
@@ -54,6 +55,52 @@
 
 					<Files Include="!(bindpath.WinPeClientPublish)\**">
 						<Exclude Files="!(bindpath.WinPeClientPublish)\**\*.pdb" />
+					</Files>
+				</Directory>
+
+				<Directory
+					Id="SERVICEFOLDER"
+					Name="Service">
+
+					<Component
+						Id="ServiceExecutableComponent"
+						Guid="*">
+
+						<File
+							Id="ServiceExecutable"
+							Source="!(bindpath.ServicePublish)\OSImageDeploy.Service.exe"
+							KeyPath="yes" />
+
+						<ServiceInstall
+							Id="InstallOSImageDeployService"
+							Name="OSImageDeploy.Service"
+							DisplayName="OS Image Deploy Service"
+							Description="Performs validated privileged USB media creation for OS Image Deploy."
+							Type="ownProcess"
+							Start="auto"
+							ErrorControl="normal"
+							Account="LocalSystem">
+
+							<util:ServiceConfig
+								FirstFailureActionType="restart"
+								SecondFailureActionType="restart"
+								ThirdFailureActionType="none"
+								RestartServiceDelayInSeconds="120"
+								ResetPeriodInDays="1" />
+						</ServiceInstall>
+
+						<ServiceControl
+							Id="ControlOSImageDeployService"
+							Name="OSImageDeploy.Service"
+							Start="install"
+							Stop="both"
+							Remove="uninstall"
+							Wait="yes" />
+					</Component>
+
+					<Files Include="!(bindpath.ServicePublish)\**">
+						<Exclude Files="!(bindpath.ServicePublish)\OSImageDeploy.Service.exe" />
+						<Exclude Files="!(bindpath.ServicePublish)\**\*.pdb" />
 					</Files>
 				</Directory>
 			</Directory>

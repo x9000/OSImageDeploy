@@ -4,6 +4,15 @@
 		<ProjectStartDate Condition="'$(ProjectStartDate)' == ''">2026-05-23</ProjectStartDate>
 
 		<!--
+			Signing credentials are supplied by the build environment. Setting a
+			certificate thumbprint automatically enables signing for Release builds;
+			portable developer and CI builds remain unsigned by default.
+		-->
+		<EnableCodeSigning
+			Condition="'$(EnableCodeSigning)' == '' and '$(Configuration)' == 'Release' and '$(CodeSigningCertificateThumbprint)' != ''">true</EnableCodeSigning>
+		<EnableCodeSigning Condition="'$(EnableCodeSigning)' == ''">false</EnableCodeSigning>
+
+		<!--
 			Windows Installer compares only three numeric version fields and limits
 			them to 255.255.65535. Rotate the major field every 256 days and use
 			the UTC build time for a naturally increasing, minute-unique build field.

@@ -10,17 +10,20 @@
 		<DefineConstants>$(DefineConstants);ProductVersion=$(ProductVersion)</DefineConstants>
 
 		<MainApplicationProject>$(MSBuildProjectDirectory)\..\OSImageDeploy\OSImageDeploy.csproj</MainApplicationProject>
+		<ServiceProject>$(MSBuildProjectDirectory)\..\OSImageDeploy.Service\OSImageDeploy.Service.csproj</ServiceProject>
 		<WinPeClientProject>$(MSBuildProjectDirectory)\..\OSImageDeployClient\OSImageDeployClient.csproj</WinPeClientProject>
 		<MainPublishDirectory>$([System.IO.Path]::GetTempPath())OSImageDeploy.Installer\$(Configuration)\publish\Main</MainPublishDirectory>
+		<ServicePublishDirectory>$([System.IO.Path]::GetTempPath())OSImageDeploy.Installer\$(Configuration)\publish\Service</ServicePublishDirectory>
 		<WinPeClientPublishDirectory>$([System.IO.Path]::GetTempPath())OSImageDeploy.Installer\$(Configuration)\publish\WinPeClient</WinPeClientPublishDirectory>
+		<MainBuildDirectory>$([System.IO.Path]::GetTempPath())OSImageDeploy.Installer\$(Configuration)\build\Main</MainBuildDirectory>
+		<ServiceBuildDirectory>$([System.IO.Path]::GetTempPath())OSImageDeploy.Installer\$(Configuration)\build\Service</ServiceBuildDirectory>
+		<WinPeClientBuildDirectory>$([System.IO.Path]::GetTempPath())OSImageDeploy.Installer\$(Configuration)\build\WinPeClient</WinPeClientBuildDirectory>
 
-		<CodeSigningCertificateThumbprint>F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907</CodeSigningCertificateThumbprint>
-		<EnableCodeSigning Condition="'$(EnableCodeSigning)' == '' and '$(Configuration)' == 'Release'">true</EnableCodeSigning>
-		<EnableCodeSigning Condition="'$(EnableCodeSigning)' == ''">false</EnableCodeSigning>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="WixToolset.UI.wixext" Version="7.0.0" />
+		<PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -31,21 +34,33 @@
 		<BindPath Include="$(WinPeClientPublishDirectory)">
 			<BindName>WinPeClientPublish</BindName>
 		</BindPath>
+
+		<BindPath Include="$(ServicePublishDirectory)">
+			<BindName>ServicePublish</BindName>
+		</BindPath>
 	</ItemGroup>
 
 	<Target Name="PublishApplicationsForInstaller" BeforeTargets="BeforeBuild">
 		<RemoveDir
-			Directories="$(MainPublishDirectory);$(WinPeClientPublishDirectory)" />
+			Directories="$(MainPublishDirectory);$(ServicePublishDirectory);$(WinPeClientPublishDirectory);$(MainBuildDirectory);$(ServiceBuildDirectory);$(WinPeClientBuildDirectory)" />
 
-		<MSBuild
-			Projects="$(MainApplicationProject)"
-			Targets="Restore;Publish"
-			Properties="Configuration=Release;PublishProfile=FolderProfile;RuntimeIdentifier=win-x64;PublishDir=$(MainPublishDirectory);EnableCodeSigning=$(EnableCodeSigning);BuildTimestampUtc=$(BuildTimestampUtc);BuildVersion=$(BuildVersion);BuildInformationalVersion=$(BuildInformationalVersion)" />
+		<Exec
+			Command="dotnet publish &quot;$(MainApplicationProject)&quot; --configuration Release --runtime win-x64 --self-contained true --output &quot;$(MainPublishDirectory)&quot; --artifacts-path &quot;$(MainBuildDirectory)&quot; --property:PublishProfile=FolderProfile --property:EnableCodeSigning=$(EnableCodeSigning) --property:CodeSigningCertificateThumbprint=$(CodeSigningCertificateThumbprint) --property:BuildTimestampUtc=$(BuildTimestampUtc) --property:BuildVersion=$(BuildVersion) --property:BuildInformationalVersion=&quot;$(BuildInformationalVersion)&quot; --nodeReuse:false" />
 
-		<MSBuild
-			Projects="$(WinPeClientProject)"
-			Targets="Restore;Publish"
-			Properties="Configuration=Release;PublishProfile=FolderProfile1;RuntimeIdentifier=win-x64;PublishDir=$(WinPeClientPublishDirectory);EnableCodeSigning=$(EnableCodeSigning);BuildTimestampUtc=$(BuildTimestampUtc);BuildVersion=$(BuildVersion);BuildInformationalVersion=$(BuildInformationalVersion)" />
+		<Exec
+			Command="dotnet publish &quot;$(WinPeClientProject)&quot; --configuration Release --runtime win-x64 --self-contained true --output &quot;$(WinPeClientPublishDirectory)&quot; --artifacts-path &quot;$(WinPeClientBuildDirectory)&quot; --property:PublishProfile=FolderProfile1 --property:EnableCodeSigning=$(EnableCodeSigning) --property:CodeSigningCertificateThumbprint=$(CodeSigningCertificateThumbprint) --property:BuildTimestampUtc=$(BuildTimestampUtc) --property:BuildVersion=$(BuildVersion) --property:BuildInformationalVersion=&quot;$(BuildInformationalVersion)&quot; --nodeReuse:false" />
+
+		<Exec
+			Command="dotnet publish &quot;$(ServiceProject)&quot; --configuration Release --runtime win-x64 --self-contained true --output &quot;$(ServicePublishDirectory)&quot; --artifacts-path &quot;$(ServiceBuildDirectory)&quot; --property:EnableCodeSigning=$(EnableCodeSigning) --property:CodeSigningCertificateThumbprint=$(CodeSigningCertificateThumbprint) --property:BuildTimestampUtc=$(BuildTimestampUtc) --property:BuildVersion=$(BuildVersion) --property:BuildInformationalVersion=&quot;$(BuildInformationalVersion)&quot; --nodeReuse:false" />
+
+		<ItemGroup>
+			<WinPeClientPublishFiles Include="$(WinPeClientPublishDirectory)\**\*" />
+		</ItemGroup>
+
+		<Copy
+			SourceFiles="@(WinPeClientPublishFiles)"
+			DestinationFiles="@(WinPeClientPublishFiles->'$(ServicePublishDirectory)\WinPEClient\%(RecursiveDir)%(Filename)%(Extension)')"
+			SkipUnchangedFiles="true" />
 	</Target>
 
 	<Target

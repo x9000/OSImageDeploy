@@ -1,8 +1,9 @@
 ﻿using Models;
+using OSImageDeploy.Client;
+using OSImageDeploy.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -22,44 +23,46 @@ namespace ViewModels
 		{
 			_installer = new WindowsAdkWinPeInstaller();
 			_installer.ProgressChanged += Installer_ProgressChanged;
-			_diskBuilder = new DiskBuilder();
-			_diskBuilder.ProgressChanged += _diskBuilder_ProgressChanged;
-			_winPeMediaCacheManager =
-				new WinPeMediaCacheManager();
+			_serviceClient = new OsImageDeployServiceClient();
 
 			RefreshUSBButtonCommand = new RelayCommand(execute: RefreshUSBButtonClickHandler, canExecute: RefreshUSBButtonCanExecuteHandler);
-			CreateUSBCommand = new RelayCommand<uint>(execute: CreateUSBClickHandler);
+			CreateUSBCommand =
+				new RelayCommand<UsbTargetDescriptor>(
+					execute: CreateUSBClickHandler);
+			CancelUSBCommand =
+				new RelayCommand(execute: CancelUSBClickHandler);
 			ExitCommand = new RelayCommand(execute: ExitCommandHandler, canExecute: ExitCanExecuteHandler);
 			StartPrereqInstalls = new RelayCommand(execute: StartPrereqInstallsHandler);
 			RebuildWinPeCacheCommand =
 				new RelayCommand(execute: RebuildWinPeCacheCommandHandler);
 
-			_ = PerformPrereqTestingAsync();
-			_ = PopulateUSBDriveListAsync();
-			_ = RefreshWinPeCacheStatusAsync();
-		}
-
-		private void _diskBuilder_ProgressChanged(object sender, DiskBuilder.DiskBuilderProgressEventArgs e)
-		{
-			
-			InfoTextBlockText = e.Stage + " - " + e.Message;
+			_ = InitializeAsync();
 		}
 
 		#endregion
 
+		private async Task InitializeAsync()
+		{
+			await PerformPrereqTestingAsync();
+			await PopulateUSBDriveListAsync();
+			await RefreshWinPeCacheStatusAsync();
+			await ReconnectToActiveUsbMediaBuildAsync();
+		}
+
 		#region Fields
 
 		private readonly WindowsAdkWinPeInstaller _installer;
-		private readonly DiskBuilder _diskBuilder;
-		private readonly WinPeMediaCacheManager _winPeMediaCacheManager;
+		private readonly OsImageDeployServiceClient _serviceClient;
 
 		private String _infoTextBlockText = "";
 		private String _subInfoTextBlockText = "";
 		private String _winPeCacheStatusText = "WinPE cache: Checking...";
 		private String _winPeCacheDetailsText = "";
+		private String _activeOperationId = "";
 		private String _titleTextBlockText = $"OS Image Deployment Tool v{Assembly.GetEntryAssembly().GetName().Version.Major}.{Assembly.GetEntryAssembly().GetName().Version.Minor}.{Assembly.GetEntryAssembly().GetName().Version.Build}";
 		private int _usbComboxSelectedItemIndex;
 		private bool _createUSBButtonEnabled = false;
+		private bool _cancelUSBButtonEnabled = false;
 		private bool _rebuildWinPeCacheButtonEnabled;
 		private bool _preReqInstallButtonEnabled = false;
 		private bool _exitButtonEnabled = true;
@@ -71,7 +74,8 @@ namespace ViewModels
 
 		#region Commands
 
-		public RelayCommand<uint> CreateUSBCommand { get; }
+		public RelayCommand<UsbTargetDescriptor> CreateUSBCommand { get; }
+		public RelayCommand CancelUSBCommand { get; }
 		public RelayCommand ExitCommand { get; }
 		public RelayCommand RefreshUSBButtonCommand { get; }
 		public RelayCommand StartPrereqInstalls { get; }
@@ -82,7 +86,8 @@ namespace ViewModels
 		#region Collections
 
 		public ObservableCollection<PreCheckModel> PreReqChecks { get; set; } = new ObservableCollection<PreCheckModel>();
-		public ObservableCollection<FSManager.DiskInfo> ListOfUSBDrives { get; set; } = new ObservableCollection<FSManager.DiskInfo>();
+		public ObservableCollection<UsbTargetDescriptor> ListOfUSBDrives { get; set; } =
+			new ObservableCollection<UsbTargetDescriptor>();
 
 		#endregion
 
@@ -266,7 +271,10 @@ namespace ViewModels
 		{
 			try
 			{
-				if (!_winPeMediaCacheManager.CacheExists)
+				WinPeCacheStatusSnapshot status =
+					await _serviceClient.GetWinPeCacheStatusAsync();
+
+				if (status.State == WinPeCacheState.Missing)
 				{
 					WinPeCacheStatusText =
 						"WinPE cache: Not available";
@@ -279,10 +287,7 @@ namespace ViewModels
 					return;
 				}
 
-				WinPeCacheManifest manifest =
-					await _winPeMediaCacheManager.LoadManifestAsync();
-
-				if (manifest == null)
+				if (status.State == WinPeCacheState.Incomplete)
 				{
 					WinPeCacheStatusText =
 						"WinPE cache: Incomplete";
@@ -295,14 +300,10 @@ namespace ViewModels
 					return;
 				}
 
-				FileInfo archiveInfo =
-					new FileInfo(
-						_winPeMediaCacheManager.ArchivePath);
-
 				String createdText =
-					manifest.CreatedUtc == default
+					!status.CreatedUtc.HasValue
 						? "Unknown"
-						: manifest.CreatedUtc
+						: status.CreatedUtc.Value
 							.ToLocalTime()
 							.ToString("g");
 
@@ -311,7 +312,7 @@ namespace ViewModels
 
 				WinPeCacheDetailsText =
 					$"Created: {createdText}    " +
-					$"Size: {archiveInfo.Length / 1024D / 1024D:F1} MB" +
+					$"Size: {status.ArchiveSizeBytes / 1024D / 1024D:F1} MB" +
 					Environment.NewLine +
 					"Validated when USB creation starts.";
 
@@ -352,7 +353,8 @@ namespace ViewModels
 
 			try
 			{
-				_winPeMediaCacheManager.Delete();
+				await _serviceClient.ClearWinPeCacheAsync(
+					cacheClearConfirmed: true);
 
 				await RefreshWinPeCacheStatusAsync();
 
@@ -393,13 +395,33 @@ namespace ViewModels
 			PreReqInstallButtonEnabled = false;
 			ExitButtonEnabled = false;
 
-			await _installer.InstallOrModifyAsync();
+			try
+			{
+				await _installer.InstallOrModifyAsync();
+			}
+			catch (Exception exception)
+			{
+				AppLog.Error(
+					"Windows ADK / WinPE prerequisite setup failed or was cancelled.",
+					exception);
 
-			ExitButtonEnabled = true;
-			PreReqChecks.Clear();
+				MessageBox.Show(
+					"Windows ADK / WinPE setup did not complete." +
+					Environment.NewLine +
+					Environment.NewLine +
+					exception.Message,
+					"Prerequisite Setup",
+					MessageBoxButton.OK,
+					MessageBoxImage.Warning);
+			}
+			finally
+			{
+				ExitButtonEnabled = true;
+				PreReqChecks.Clear();
 
-			_ = PerformPrereqTestingAsync();
-			_ = PopulateUSBDriveListAsync();
+				await PerformPrereqTestingAsync();
+				await PopulateUSBDriveListAsync();
+			}
 		}
 
 		private bool ArePrerequisitesInstalled()
@@ -434,38 +456,136 @@ namespace ViewModels
 
 		private async Task PopulateUSBDriveListAsync()
 		{
-			List<FSManager.DiskInfo> disks = await Task.Run(() =>
-				FSManager.EnumerateDisks()
-					.Where(disk => disk.InterfaceType.Contains("USB"))
-					.ToList());
-
-			ListOfUSBDrives.Clear();
-
-			if (disks.Count > 0)
-			{
-				foreach (FSManager.DiskInfo disk in disks)
-				{
-					ListOfUSBDrives.Add(disk);
-				}
-			}
-			else
-			{
-				ListOfUSBDrives.Add(new FSManager.DiskInfo { Name = "No USB suitable devices found." });
-			}
-
-			USBComboxSelectedItemIndex = 0;
-
 			bool prerequisitesInstalled = ArePrerequisitesInstalled();
 
 			PreReqInstallButtonEnabled = !prerequisitesInstalled;
 			UpdatePrerequisitePanelVisibility(prerequisitesInstalled);
+			CreateUSBButtonEnabled = false;
+			RefreshUSBButtonEnabled = false;
 
-			CreateUSBButtonEnabled = prerequisitesInstalled && disks.Count > 0;
+			try
+			{
+				IReadOnlyList<UsbTargetDescriptor> targets =
+					await _serviceClient.GetEligibleTargetsAsync();
+
+				ListOfUSBDrives.Clear();
+
+				foreach (UsbTargetDescriptor target in targets)
+				{
+					ListOfUSBDrives.Add(target);
+				}
+
+				USBComboxSelectedItemIndex = targets.Count > 0 ? 0 : -1;
+				CreateUSBButtonEnabled =
+					prerequisitesInstalled && targets.Count > 0;
+
+				if (targets.Count == 0)
+				{
+					InfoTextBlockText =
+						"No suitable USB storage devices were reported by the service.";
+				}
+			}
+			catch (OsImageDeployServiceException exception)
+			{
+				ListOfUSBDrives.Clear();
+				USBComboxSelectedItemIndex = -1;
+				InfoTextBlockText =
+					"The OS Image Deploy service is unavailable. " +
+					"USB creation is disabled.";
+
+				AppLog.Error(
+					"Failed to retrieve USB targets from the service.",
+					exception);
+			}
+			finally
+			{
+				RefreshUSBButtonEnabled = true;
+			}
+		}
+
+		public bool CancelUSBButtonEnabled
+		{
+			get
+			{
+				return _cancelUSBButtonEnabled;
+			}
+			set
+			{
+				_cancelUSBButtonEnabled = value;
+				NotifyPropertyChanged(nameof(CancelUSBButtonEnabled));
+			}
 		}
 
 		#endregion
 
 		#region Command Handlers
+
+		private async Task ReconnectToActiveUsbMediaBuildAsync()
+		{
+			try
+			{
+				UsbMediaOperationSnapshot operation =
+					await _serviceClient.GetActiveUsbMediaBuildAsync();
+
+				if (operation == null)
+				{
+					await DisplayInterruptedUsbMediaBuildAsync();
+					return;
+				}
+
+				SetUsbOperationControls(operation);
+				InfoTextBlockText =
+					"Reconnected to the USB media operation already running in the service.";
+
+				await WatchUsbMediaOperationAsync(operation);
+			}
+			catch (UsbMediaOperationFailedException exception)
+			{
+				HandleUsbOperationTerminalFailure(
+					"The reconnected USB media operation failed.",
+					exception);
+			}
+			catch (Exception exception) when (
+				String.IsNullOrWhiteSpace(_activeOperationId))
+			{
+				AppLog.Error(
+					"Failed to query the service for an active USB media operation.",
+					exception);
+			}
+			catch (Exception exception)
+			{
+				HandleUsbOperationFailure(
+					"Failed while reconnecting to the active USB media operation.",
+					exception,
+					statusMayBeLost: true);
+			}
+			finally
+			{
+				if (!String.IsNullOrWhiteSpace(_activeOperationId))
+				{
+					await RestoreControlsAfterUsbOperationAsync();
+				}
+			}
+		}
+
+		private async Task DisplayInterruptedUsbMediaBuildAsync()
+		{
+			UsbMediaOperationSnapshot operation =
+				await _serviceClient.GetLastUsbMediaBuildAsync();
+
+			if (operation?.State != UsbMediaOperationState.Failed ||
+				!String.Equals(
+					operation.Progress?.Stage,
+					"Interrupted",
+					StringComparison.Ordinal))
+			{
+				return;
+			}
+
+			InfoTextBlockText =
+				"The previous USB media operation was interrupted by a service restart.";
+			SubInfoTextBlockText = operation.ErrorMessage;
+		}
 
 		private bool ExitCanExecuteHandler()
 		{
@@ -477,82 +597,235 @@ namespace ViewModels
 			Environment.Exit(0);
 		}
 
-		private async void CreateUSBClickHandler(uint diskNumber)
+		private async void CreateUSBClickHandler(
+			UsbTargetDescriptor selectedTarget)
 		{
+			if (selectedTarget == null ||
+				String.IsNullOrWhiteSpace(selectedTarget.TargetId))
+			{
+				return;
+			}
+
+			MessageBoxResult confirmation = MessageBox.Show(
+				$"All existing data on the following device will be permanently erased:" +
+				Environment.NewLine +
+				Environment.NewLine +
+				selectedTarget.DisplayName +
+				Environment.NewLine +
+				$"Size: {selectedTarget.SizeBytes / 1024D / 1024D / 1024D:F1} GB" +
+				Environment.NewLine +
+				Environment.NewLine +
+				"Continue with USB creation?",
+				"Confirm Destructive USB Operation",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Warning,
+				MessageBoxResult.No);
+
+			if (confirmation != MessageBoxResult.Yes)
+			{
+				return;
+			}
+
 			ExitButtonEnabled = false;
 			CreateUSBButtonEnabled = false;
 			RefreshUSBButtonEnabled = false;
 			RebuildWinPeCacheButtonEnabled = false;
-			DiskBuilder diskBuilder = new DiskBuilder();
-			diskBuilder.ProgressChanged += DiskBuilder_ProgressChanged;
 
 			try
 			{
-				await diskBuilder.PrepareDiskAsync(diskNumber);
+				UsbMediaOperationSnapshot operation =
+					await _serviceClient.StartUsbMediaBuildAsync(
+						new UsbMediaBuildRequest
+						{
+							Target = selectedTarget,
+							DestructiveActionConfirmed = true
+						});
+
+				SetUsbOperationControls(operation);
+				await WatchUsbMediaOperationAsync(operation);
+			}
+			catch (UsbMediaOperationFailedException exception)
+			{
+				HandleUsbOperationTerminalFailure(
+					$"USB creation failed for target {selectedTarget.TargetId}.",
+					exception);
 			}
 			catch (Exception exception)
 			{
-				InfoTextBlockText =
-					"USB creation failed.";
-
-				SubInfoTextBlockText = "";
-
-				AppLog.Error(
-					$"USB creation failed for disk number {diskNumber}.",
-					exception);
-
-				MessageBox.Show(
-					"The bootable USB could not be created." +
-					Environment.NewLine +
-					Environment.NewLine +
-					exception.Message +
-					Environment.NewLine +
-					Environment.NewLine +
-					"See the application log for full details.",
-					"USB Creation Failed",
-					MessageBoxButton.OK,
-					MessageBoxImage.Error);
+				HandleUsbOperationFailure(
+					$"USB creation failed for target {selectedTarget.TargetId}.",
+					exception,
+					statusMayBeLost:
+						!String.IsNullOrWhiteSpace(_activeOperationId));
 			}
 			finally
 			{
-				diskBuilder.ProgressChanged -=
-					DiskBuilder_ProgressChanged;
-
-				ExitButtonEnabled = true;
-				CreateUSBButtonEnabled = true;
-				RefreshUSBButtonEnabled = true;
-
-				await RefreshWinPeCacheStatusAsync();
+				await RestoreControlsAfterUsbOperationAsync();
 			}
 		}
 
-		private void DiskBuilder_ProgressChanged(object sender, DiskBuilder.DiskBuilderProgressEventArgs e)
+		private void SetUsbOperationControls(
+			UsbMediaOperationSnapshot operation)
 		{
-			if (e.Stage.StartsWith("DISM"))
+			_activeOperationId = operation.OperationId;
+			ExitButtonEnabled = false;
+			CreateUSBButtonEnabled = false;
+			RefreshUSBButtonEnabled = false;
+			RebuildWinPeCacheButtonEnabled = false;
+			CancelUSBButtonEnabled =
+				operation.State != UsbMediaOperationState.CancellationRequested;
+		}
+
+		private async Task WatchUsbMediaOperationAsync(
+			UsbMediaOperationSnapshot operation)
+		{
+			UpdateOperationProgress(operation.Progress);
+
+			await foreach (UsbMediaOperationSnapshot update in
+				_serviceClient.WatchUsbMediaBuildAsync(operation.OperationId))
 			{
-				if (e.Percent != null)
+				UpdateOperationProgress(update.Progress);
+
+				if (update.State == UsbMediaOperationState.CancellationRequested)
 				{
-					SubInfoTextBlockText = $"{e.Stage} - {e.Message} {e.Percent}%";
+					CancelUSBButtonEnabled = false;
 				}
-				else
+
+				if (update.State == UsbMediaOperationState.Failed)
 				{
-					SubInfoTextBlockText = e.Message;
+					throw new UsbMediaOperationFailedException(
+						String.IsNullOrWhiteSpace(update.ErrorMessage)
+							? "The service could not create the USB media."
+							: update.ErrorMessage);
 				}
+
+				if (update.State == UsbMediaOperationState.Cancelled)
+				{
+					InfoTextBlockText = "USB creation was cancelled.";
+					return;
+				}
+			}
+		}
+
+		private void HandleUsbOperationTerminalFailure(
+			String logMessage,
+			Exception exception)
+		{
+			InfoTextBlockText = "USB creation failed.";
+			SubInfoTextBlockText = "";
+
+			AppLog.Error(logMessage, exception);
+
+			MessageBox.Show(
+				"The service reported that USB media creation failed." +
+				Environment.NewLine +
+				Environment.NewLine +
+				exception.Message +
+				Environment.NewLine +
+				Environment.NewLine +
+				"The operation has stopped. Inspect the target before retrying.",
+				"USB Creation Failed",
+				MessageBoxButton.OK,
+				MessageBoxImage.Error);
+		}
+
+		private void HandleUsbOperationFailure(
+			String logMessage,
+			Exception exception,
+			Boolean statusMayBeLost)
+		{
+			InfoTextBlockText = statusMayBeLost
+				? "USB operation status was lost."
+				: "USB creation could not be started.";
+			SubInfoTextBlockText = "";
+
+			AppLog.Error(logMessage, exception);
+
+			String guidance = statusMayBeLost
+				? "If the service restarted, its in-memory operation state was lost. " +
+					"Inspect the target before starting another build."
+				: "No USB media operation was started.";
+
+			MessageBox.Show(
+				(statusMayBeLost
+					? "The USB media operation could not be monitored to completion."
+					: "The bootable USB operation could not be started.") +
+				Environment.NewLine +
+				Environment.NewLine +
+				exception.Message +
+				Environment.NewLine +
+				Environment.NewLine +
+				guidance,
+				statusMayBeLost
+					? "USB Operation Status Lost"
+					: "USB Creation Not Started",
+				MessageBoxButton.OK,
+				MessageBoxImage.Error);
+		}
+
+		private async Task RestoreControlsAfterUsbOperationAsync()
+		{
+			_activeOperationId = "";
+			CancelUSBButtonEnabled = false;
+			ExitButtonEnabled = true;
+			RefreshUSBButtonEnabled = true;
+
+			await RefreshWinPeCacheStatusAsync();
+			await PopulateUSBDriveListAsync();
+		}
+
+		private async void CancelUSBClickHandler()
+		{
+			if (String.IsNullOrWhiteSpace(_activeOperationId))
+			{
+				return;
+			}
+
+			CancelUSBButtonEnabled = false;
+
+			try
+			{
+				await _serviceClient.CancelUsbMediaBuildAsync(
+					_activeOperationId);
+
+				InfoTextBlockText =
+					"Cancellation requested. The current Windows operation " +
+					"will finish before the service stops at a safe checkpoint.";
+			}
+			catch (OsImageDeployServiceException exception)
+			{
+				AppLog.Error(
+					"Failed to request USB operation cancellation.",
+					exception);
+
+				InfoTextBlockText =
+					"The cancellation request could not be delivered to the service.";
+				CancelUSBButtonEnabled = true;
+			}
+		}
+
+		private void UpdateOperationProgress(OperationProgress progress)
+		{
+			if (progress == null)
+			{
+				return;
+			}
+
+			if (progress.Stage.StartsWith("DISM"))
+			{
+				SubInfoTextBlockText = progress.OverallPercent.HasValue
+					? $"{progress.Stage} - {progress.Message} " +
+						$"{progress.OverallPercent}%"
+					: progress.Message;
 			}
 			else
 			{
 				SubInfoTextBlockText = "";
-				if (e.Percent != null)
-				{
-					InfoTextBlockText = $"{e.Stage} - {e.Message} {e.Percent}%";
-				}
-				else
-				{
-					InfoTextBlockText = e.Message;
-				}
+				InfoTextBlockText = progress.OverallPercent.HasValue
+					? $"{progress.Stage} - {progress.Message} " +
+						$"{progress.OverallPercent}%"
+					: progress.Message;
 			}
-
-			
 		}
 
 		private bool RefreshUSBButtonCanExecuteHandler()
@@ -589,5 +862,13 @@ namespace ViewModels
 		}
 
 		#endregion
+
+		private sealed class UsbMediaOperationFailedException : Exception
+		{
+			public UsbMediaOperationFailedException(String message)
+				: base(message)
+			{
+			}
+		}
 	}
 }

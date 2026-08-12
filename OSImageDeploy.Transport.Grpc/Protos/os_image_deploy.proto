@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+option csharp_namespace = "OSImageDeploy.Transport.Grpc.V1";
+
+package os_image_deploy.v1;
+
+service OsImageDeployControl {
+	rpc GetServiceStatus (GetServiceStatusRequest) returns (GetServiceStatusResponse);
+	rpc ListEligibleUsbTargets (ListEligibleUsbTargetsRequest) returns (ListEligibleUsbTargetsResponse);
+	rpc ValidateUsbTarget (ValidateUsbTargetRequest) returns (ValidateUsbTargetResponse);
+	rpc StartUsbMediaBuild (StartUsbMediaBuildRequest) returns (UsbMediaOperationUpdate);
+	rpc WatchUsbMediaBuild (UsbMediaOperationRequest) returns (stream UsbMediaOperationUpdate);
+	rpc GetUsbMediaBuildStatus (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
+	rpc GetActiveUsbMediaBuild (GetActiveUsbMediaBuildRequest) returns (GetActiveUsbMediaBuildResponse);
+	rpc GetLastUsbMediaBuild (GetLastUsbMediaBuildRequest) returns (GetLastUsbMediaBuildResponse);
+	rpc CancelUsbMediaBuild (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
+	rpc GetWinPeCacheStatus (GetWinPeCacheStatusRequest) returns (WinPeCacheStatusResponse);
+	rpc ClearWinPeCache (ClearWinPeCacheRequest) returns (WinPeCacheStatusResponse);
+}
+
+message GetServiceStatusRequest {
+}
+
+message GetServiceStatusResponse {
+	string service_name = 1;
+	string service_version = 2;
+	string api_version = 3;
+	bool read_only = 4;
+}
+
+message ListEligibleUsbTargetsRequest {
+}
+
+message ListEligibleUsbTargetsResponse {
+	repeated UsbTarget targets = 1;
+}
+
+message ValidateUsbTargetRequest {
+	UsbTarget selected_target = 1;
+}
+
+message ValidateUsbTargetResponse {
+	bool is_valid = 1;
+	string summary = 2;
+	repeated string warnings = 3;
+	UsbTarget resolved_target = 4;
+}
+
+message UsbTarget {
+	string target_id = 1;
+	uint32 disk_number = 2;
+	string display_name = 3;
+	string model = 4;
+	string serial_number = 5;
+	string bus_type = 6;
+	uint64 size_bytes = 7;
+	bool is_system_disk = 8;
+	bool is_boot_disk = 9;
+	bool is_read_only = 10;
+	bool is_offline = 11;
+	bool is_clustered = 12;
+	uint32 health_status = 13;
+}
+
+message StartUsbMediaBuildRequest {
+	UsbTarget selected_target = 1;
+	bool destructive_action_confirmed = 2;
+	bool rebuild_win_pe_cache = 3;
+}
+
+message UsbMediaOperationRequest {
+	string operation_id = 1;
+}
+
+message GetActiveUsbMediaBuildRequest {
+}
+
+message GetActiveUsbMediaBuildResponse {
+	bool has_active_operation = 1;
+	UsbMediaOperationUpdate operation = 2;
+}
+
+message GetLastUsbMediaBuildRequest {
+}
+
+message GetLastUsbMediaBuildResponse {
+	bool has_operation = 1;
+	UsbMediaOperationUpdate operation = 2;
+}
+
+message UsbMediaOperationUpdate {
+	string operation_id = 1;
+	UsbMediaOperationState state = 2;
+	OperationProgress progress = 3;
+	string error_message = 4;
+	int64 started_unix_time_ms = 5;
+	int64 completed_unix_time_ms = 6;
+}
+
+message OperationProgress {
+	string stage = 1;
+	string message = 2;
+	int32 overall_percent = 3;
+	bool has_overall_percent = 4;
+	int32 stage_percent = 5;
+	bool has_stage_percent = 6;
+	OperationLogLevel log_level = 7;
+}
+
+enum UsbMediaOperationState {
+	USB_MEDIA_OPERATION_STATE_PENDING = 0;
+	USB_MEDIA_OPERATION_STATE_RUNNING = 1;
+	USB_MEDIA_OPERATION_STATE_CANCELLATION_REQUESTED = 2;
+	USB_MEDIA_OPERATION_STATE_SUCCEEDED = 3;
+	USB_MEDIA_OPERATION_STATE_FAILED = 4;
+	USB_MEDIA_OPERATION_STATE_CANCELLED = 5;
+}
+
+enum OperationLogLevel {
+	OPERATION_LOG_LEVEL_DEBUG = 0;
+	OPERATION_LOG_LEVEL_INFORMATION = 1;
+	OPERATION_LOG_LEVEL_WARNING = 2;
+	OPERATION_LOG_LEVEL_ERROR = 3;
+}
+
+message GetWinPeCacheStatusRequest {
+}
+
+message ClearWinPeCacheRequest {
+	bool cache_clear_confirmed = 1;
+}
+
+message WinPeCacheStatusResponse {
+	WinPeCacheState state = 1;
+	int64 created_unix_time_ms = 2;
+	bool has_created_time = 3;
+	int64 archive_size_bytes = 4;
+}
+
+enum WinPeCacheState {
+	WIN_PE_CACHE_STATE_MISSING = 0;
+	WIN_PE_CACHE_STATE_INCOMPLETE = 1;
+	WIN_PE_CACHE_STATE_AVAILABLE = 2;
+}
