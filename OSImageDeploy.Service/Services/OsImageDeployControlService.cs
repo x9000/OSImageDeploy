@@ -285,6 +285,29 @@ namespace OSImageDeploy.Service.Services
 			return Task.FromResult(response);
 		}
 
+		public override Task<GetLastUsbMediaBuildResponse>
+			GetLastUsbMediaBuild(
+				GetLastUsbMediaBuildRequest request,
+				ServerCallContext context)
+		{
+			UsbMediaOperationSnapshot? operation =
+				_operationCoordinator.GetLastOperation();
+
+			GetLastUsbMediaBuildResponse response =
+				new GetLastUsbMediaBuildResponse
+				{
+					HasOperation = operation != null
+				};
+
+			if (operation != null)
+			{
+				response.Operation =
+					GrpcOperationMapper.ToMessage(operation);
+			}
+
+			return Task.FromResult(response);
+		}
+
 		public override Task<UsbMediaOperationUpdate> CancelUsbMediaBuild(
 			UsbMediaOperationRequest request,
 			ServerCallContext context)

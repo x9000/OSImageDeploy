@@ -27,4 +27,14 @@
 			Text="The calculated version build field exceeds the Windows Installer maximum of 65535." />
 	</Target>
 
+	<Target
+		Name="ValidateCodeSigningSettings"
+		BeforeTargets="SignBuildOutput;SignPublishOutput;SignInstaller"
+		Condition="'$(EnableCodeSigning)' == 'true'">
+
+		<Error
+			Condition="'$(CodeSigningCertificateThumbprint)' == ''"
+			Text="Code signing is enabled, but CodeSigningCertificateThumbprint was not supplied." />
+	</Target>
+
 </Project>

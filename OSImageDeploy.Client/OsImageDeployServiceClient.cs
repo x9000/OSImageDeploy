@@ -220,6 +220,31 @@ namespace OSImageDeploy.Client
 			}
 		}
 
+		public async Task<UsbMediaOperationSnapshot?>
+			GetLastUsbMediaBuildAsync(
+				CancellationToken cancellationToken = default)
+		{
+			try
+			{
+				GetLastUsbMediaBuildResponse response =
+					await _client.GetLastUsbMediaBuildAsync(
+						new GetLastUsbMediaBuildRequest(),
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				if (!response.HasOperation || response.Operation == null)
+				{
+					return null;
+				}
+
+				return GrpcOperationMapper.ToSnapshot(response.Operation);
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
 		public async Task<UsbMediaOperationSnapshot> CancelUsbMediaBuildAsync(
 			String operationId,
 			CancellationToken cancellationToken = default)

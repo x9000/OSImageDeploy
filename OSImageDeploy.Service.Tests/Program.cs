@@ -75,6 +75,37 @@ Assert(
 
 Console.WriteLine("PASS: USB media operation gRPC contract round trip.");
 
+String operationStoreDirectory = Path.Combine(
+	Path.GetTempPath(),
+	"OSImageDeploy.Service.Tests",
+	Guid.NewGuid().ToString("N"));
+
+try
+{
+	JsonUsbMediaOperationStore operationStore =
+		new JsonUsbMediaOperationStore(operationStoreDirectory);
+	operationStore.Save(operationSnapshot);
+
+	UsbMediaOperationSnapshot? persistedOperation = operationStore.Load();
+
+	Assert(persistedOperation != null, "Persisted operation was not loaded.");
+	Assert(
+		persistedOperation!.OperationId == operationSnapshot.OperationId,
+		"Persisted operation identity changed.");
+	Assert(
+		persistedOperation.Progress?.OverallPercent == 42,
+		"Persisted operation progress changed.");
+
+	Console.WriteLine("PASS: USB media operation JSON persistence round trip.");
+}
+finally
+{
+	if (Directory.Exists(operationStoreDirectory))
+	{
+		Directory.Delete(operationStoreDirectory, recursive: true);
+	}
+}
+
 WinPeCacheStatusSnapshot cacheSnapshot =
 	new WinPeCacheStatusSnapshot
 	{
@@ -193,6 +224,25 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 
 	Console.WriteLine("PASS: Live named-pipe service status call.");
 
+	ListEligibleUsbTargetsResponse eligibleTargets =
+		await client.ListEligibleUsbTargetsAsync(
+			new ListEligibleUsbTargetsRequest(),
+			deadline: DateTime.UtcNow.AddSeconds(10));
+
+	Assert(
+		eligibleTargets.Targets.All(target =>
+			target.BusType.Equals("USB", StringComparison.OrdinalIgnoreCase) &&
+			!target.IsSystemDisk &&
+			!target.IsBootDisk &&
+			!target.IsReadOnly &&
+			!target.IsOffline &&
+			!target.IsClustered &&
+			target.HealthStatus == 0),
+		"The service returned a USB target outside the safety envelope.");
+
+	Console.WriteLine(
+		$"PASS: Live USB target enumeration ({eligibleTargets.Targets.Count} eligible target(s)).");
+
 	Boolean unconfirmedRequestRejected = false;
 
 	try
@@ -227,6 +277,20 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 		"The service reported an active USB operation when none was started.");
 
 	Console.WriteLine("PASS: Live no-active-operation query.");
+
+	GetLastUsbMediaBuildResponse lastOperation =
+		await client.GetLastUsbMediaBuildAsync(
+			new GetLastUsbMediaBuildRequest(),
+			deadline: DateTime.UtcNow.AddSeconds(10));
+
+	if (lastOperation.HasOperation)
+	{
+		Assert(
+			!String.IsNullOrWhiteSpace(lastOperation.Operation?.OperationId),
+			"The service returned a last operation without an identity.");
+	}
+
+	Console.WriteLine("PASS: Live last-operation status query.");
 
 	await client.GetWinPeCacheStatusAsync(
 		new GetWinPeCacheStatusRequest(),

@@ -12,6 +12,7 @@ service OsImageDeployControl {
 	rpc WatchUsbMediaBuild (UsbMediaOperationRequest) returns (stream UsbMediaOperationUpdate);
 	rpc GetUsbMediaBuildStatus (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
 	rpc GetActiveUsbMediaBuild (GetActiveUsbMediaBuildRequest) returns (GetActiveUsbMediaBuildResponse);
+	rpc GetLastUsbMediaBuild (GetLastUsbMediaBuildRequest) returns (GetLastUsbMediaBuildResponse);
 	rpc CancelUsbMediaBuild (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
 	rpc GetWinPeCacheStatus (GetWinPeCacheStatusRequest) returns (WinPeCacheStatusResponse);
 	rpc ClearWinPeCache (ClearWinPeCacheRequest) returns (WinPeCacheStatusResponse);
@@ -76,6 +77,14 @@ message GetActiveUsbMediaBuildRequest {
 
 message GetActiveUsbMediaBuildResponse {
 	bool has_active_operation = 1;
+	UsbMediaOperationUpdate operation = 2;
+}
+
+message GetLastUsbMediaBuildRequest {
+}
+
+message GetLastUsbMediaBuildResponse {
+	bool has_operation = 1;
 	UsbMediaOperationUpdate operation = 2;
 }
 

@@ -33,9 +33,7 @@
 	</ItemGroup>
 
 	<PropertyGroup>
-		<CodeSigningCertificateThumbprint>F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907</CodeSigningCertificateThumbprint>
 		<SigningScriptPath>$(MSBuildThisFileDirectory)..\Build\Sign-File.ps1</SigningScriptPath>
-		<EnableCodeSigning Condition="'$(EnableCodeSigning)' == ''">true</EnableCodeSigning>
 	</PropertyGroup>
 
 	<Target Name="SignBuildOutput" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(EnableCodeSigning)' == 'true'">

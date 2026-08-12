@@ -52,9 +52,18 @@ builder.Services.AddSingleton<IUsbMediaWorkflow>(services =>
 builder.Services.AddSingleton<WinPeMediaCacheManager>();
 builder.Services.AddSingleton<IWinPeCacheService>(services =>
 	services.GetRequiredService<WindowsUsbMediaWorkflow>());
+builder.Services.AddSingleton<IUsbMediaOperationStore,
+	JsonUsbMediaOperationStore>();
 builder.Services.AddSingleton<IUsbMediaOperationCoordinator>(services =>
 	new UsbMediaOperationCoordinator(
-		services.GetRequiredService<IUsbMediaWorkflow>()));
+		services.GetRequiredService<IUsbMediaWorkflow>(),
+		services.GetRequiredService<IUsbMediaOperationStore>(),
+		exception =>
+			services.GetRequiredService<
+				ILogger<UsbMediaOperationCoordinator>>()
+			.LogError(
+				exception,
+				"Failed to persist USB media operation status.")));
 
 WebApplication app = builder.Build();
 

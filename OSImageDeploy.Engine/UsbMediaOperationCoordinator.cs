@@ -9,16 +9,26 @@ namespace OSImageDeploy.Engine
 	{
 		private readonly Object _sync = new Object();
 		private readonly IUsbMediaWorkflow _workflow;
+		private readonly IUsbMediaOperationStore? _store;
+		private readonly Action<Exception>? _persistenceErrorHandler;
 		private readonly Dictionary<String, OperationRecord> _operations =
 			new Dictionary<String, OperationRecord>(StringComparer.Ordinal);
 
 		private OperationRecord? _activeOperation;
+		private UsbMediaOperationSnapshot? _lastOperation;
 		private Boolean _disposed;
 
-		public UsbMediaOperationCoordinator(IUsbMediaWorkflow workflow)
+		public UsbMediaOperationCoordinator(
+			IUsbMediaWorkflow workflow,
+			IUsbMediaOperationStore? store = null,
+			Action<Exception>? persistenceErrorHandler = null)
 		{
 			_workflow = workflow ??
 				throw new ArgumentNullException(nameof(workflow));
+			_store = store;
+			_persistenceErrorHandler = persistenceErrorHandler;
+
+			RestoreLastOperation();
 		}
 
 		public UsbMediaOperationSnapshot Start(UsbMediaBuildRequest request)
@@ -65,6 +75,8 @@ namespace OSImageDeploy.Engine
 
 				_operations.Add(operationId, operation);
 				_activeOperation = operation;
+				_lastOperation = operation.Current;
+				Persist(operation.Current);
 			}
 
 			operation.ExecutionTask = Task.Run(
@@ -96,6 +108,16 @@ namespace OSImageDeploy.Engine
 				}
 
 				return _activeOperation.Current;
+			}
+		}
+
+		public UsbMediaOperationSnapshot? GetLastOperation()
+		{
+			ObjectDisposedException.ThrowIf(_disposed, this);
+
+			lock (_sync)
+			{
+				return _lastOperation;
 			}
 		}
 
@@ -205,7 +227,7 @@ namespace OSImageDeploy.Engine
 							update));
 
 				await _workflow.CreateUsbMediaAsync(
-					operation.Request,
+					operation.Request!,
 					progress,
 					operation.Cancellation.Token);
 
@@ -259,10 +281,92 @@ namespace OSImageDeploy.Engine
 
 				operation.Current = snapshot;
 				operation.History.Add(snapshot);
+				_lastOperation = snapshot;
+				Persist(snapshot);
 
 				TaskCompletionSource changed = operation.Changed;
 				operation.Changed = CreateChangedSignal();
 				changed.TrySetResult();
+			}
+		}
+
+		private void RestoreLastOperation()
+		{
+			if (_store == null)
+			{
+				return;
+			}
+
+			try
+			{
+				UsbMediaOperationSnapshot? snapshot = _store.Load();
+
+				if (snapshot == null)
+				{
+					return;
+				}
+
+				if (!snapshot.IsTerminal)
+				{
+					snapshot = new UsbMediaOperationSnapshot
+					{
+						OperationId = snapshot.OperationId,
+						State = UsbMediaOperationState.Failed,
+						Progress = new OperationProgress
+						{
+							Stage = "Interrupted",
+							Message =
+								"The service stopped before USB media creation completed.",
+							OverallPercent = snapshot.Progress?.OverallPercent,
+							StagePercent = snapshot.Progress?.StagePercent,
+							LogLevel = OperationLogLevel.Error
+						},
+						ErrorMessage =
+							"The service restarted before the operation completed. " +
+							"Inspect the USB target before starting a new operation.",
+						StartedUtc = snapshot.StartedUtc,
+						CompletedUtc = DateTimeOffset.UtcNow
+					};
+
+					Persist(snapshot);
+				}
+
+				OperationRecord restored = new OperationRecord(snapshot);
+				_operations[snapshot.OperationId] = restored;
+				_lastOperation = snapshot;
+			}
+			catch (Exception exception)
+			{
+				ReportPersistenceError(exception);
+			}
+		}
+
+		private void Persist(UsbMediaOperationSnapshot snapshot)
+		{
+			if (_store == null)
+			{
+				return;
+			}
+
+			try
+			{
+				_store.Save(snapshot);
+			}
+			catch (Exception exception)
+			{
+				ReportPersistenceError(exception);
+			}
+		}
+
+		private void ReportPersistenceError(Exception exception)
+		{
+			try
+			{
+				_persistenceErrorHandler?.Invoke(exception);
+			}
+			catch
+			{
+				// Status persistence must never interrupt a destructive workflow.
 			}
 		}
 
@@ -302,7 +406,13 @@ namespace OSImageDeploy.Engine
 				History.Add(initialSnapshot);
 			}
 
-			public UsbMediaBuildRequest Request { get; }
+			public OperationRecord(UsbMediaOperationSnapshot initialSnapshot)
+			{
+				Current = initialSnapshot;
+				History.Add(initialSnapshot);
+			}
+
+			public UsbMediaBuildRequest? Request { get; }
 
 			public UsbMediaOperationSnapshot Current { get; set; }
 

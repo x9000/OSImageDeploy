@@ -529,6 +529,7 @@ namespace ViewModels
 
 				if (operation == null)
 				{
+					await DisplayInterruptedUsbMediaBuildAsync();
 					return;
 				}
 
@@ -565,6 +566,25 @@ namespace ViewModels
 					await RestoreControlsAfterUsbOperationAsync();
 				}
 			}
+		}
+
+		private async Task DisplayInterruptedUsbMediaBuildAsync()
+		{
+			UsbMediaOperationSnapshot operation =
+				await _serviceClient.GetLastUsbMediaBuildAsync();
+
+			if (operation?.State != UsbMediaOperationState.Failed ||
+				!String.Equals(
+					operation.Progress?.Stage,
+					"Interrupted",
+					StringComparison.Ordinal))
+			{
+				return;
+			}
+
+			InfoTextBlockText =
+				"The previous USB media operation was interrupted by a service restart.";
+			SubInfoTextBlockText = operation.ErrorMessage;
 		}
 
 		private bool ExitCanExecuteHandler()

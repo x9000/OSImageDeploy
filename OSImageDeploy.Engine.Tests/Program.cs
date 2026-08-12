@@ -38,7 +38,10 @@ List<(String Name, Func<Task> Test)> asyncTests = new()
 	("Media operation completes with progress", OperationCompletesWithProgress),
 	("Active media operation is reported until completion", ActiveOperationIsReportedUntilCompletion),
 	("Concurrent media operation is rejected", ConcurrentOperationIsRejected),
-	("Media operation cancellation is recorded", OperationCancellationIsRecorded)
+	("Media operation cancellation is recorded", OperationCancellationIsRecorded),
+	("Completed operation status survives coordinator recreation", CompletedOperationStatusSurvivesRestart),
+	("Interrupted operation is reconciled without resuming", InterruptedOperationIsReconciledWithoutResuming),
+	("Status persistence failure does not stop the workflow", PersistenceFailureDoesNotStopWorkflow)
 };
 
 foreach ((String name, Func<Task> test) in asyncTests)
@@ -320,6 +323,128 @@ static async Task OperationCancellationIsRecorded()
 		"The cancelled workflow was not marked as cancelled.");
 }
 
+static async Task CompletedOperationStatusSurvivesRestart()
+{
+	FakeUsbMediaOperationStore store = new FakeUsbMediaOperationStore();
+	String operationId;
+
+	using (UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(new FakeUsbMediaWorkflow(), store))
+	{
+		UsbMediaOperationSnapshot started =
+			coordinator.Start(CreateBuildRequest());
+		operationId = started.OperationId;
+
+		await ReadUntilTerminalAsync(coordinator, operationId);
+	}
+
+	using UsbMediaOperationCoordinator restoredCoordinator =
+		new UsbMediaOperationCoordinator(new FakeUsbMediaWorkflow(), store);
+
+	UsbMediaOperationSnapshot? restored =
+		restoredCoordinator.GetLastOperation();
+
+	Assert(restored != null, "The persisted operation was not restored.");
+	Assert(
+		restored!.OperationId == operationId,
+		"The restored operation identity changed.");
+	Assert(
+		restored.State == UsbMediaOperationState.Succeeded,
+		"The successful terminal state was not restored.");
+	Assert(
+		restoredCoordinator.GetStatus(operationId).State ==
+			UsbMediaOperationState.Succeeded,
+		"The restored operation could not be queried by identity.");
+	Assert(
+		restoredCoordinator.GetActiveOperation() == null,
+		"A restored terminal operation was reported as active.");
+}
+
+static Task InterruptedOperationIsReconciledWithoutResuming()
+{
+	Int32 workflowInvocations = 0;
+	FakeUsbMediaOperationStore store = new FakeUsbMediaOperationStore
+	{
+		Snapshot = new UsbMediaOperationSnapshot
+		{
+			OperationId = "interrupted-operation",
+			State = UsbMediaOperationState.Running,
+			Progress = new OperationProgress
+			{
+				Stage = "Copying",
+				Message = "Copying files.",
+				OverallPercent = 63
+			},
+			StartedUtc = DateTimeOffset.UtcNow.AddMinutes(-2)
+		}
+	};
+	FakeUsbMediaWorkflow workflow = new FakeUsbMediaWorkflow
+	{
+		CreateHandler = (request, progress, cancellationToken) =>
+		{
+			workflowInvocations++;
+			return Task.CompletedTask;
+		}
+	};
+
+	using UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(workflow, store);
+
+	UsbMediaOperationSnapshot? restored = coordinator.GetLastOperation();
+
+	Assert(restored != null, "The interrupted operation was not restored.");
+	Assert(
+		restored!.State == UsbMediaOperationState.Failed,
+		"The interrupted operation was not reconciled as failed.");
+	Assert(
+		restored.Progress?.Stage == "Interrupted",
+		"The interruption was not clearly identified.");
+	Assert(
+		restored.Progress?.OverallPercent == 63,
+		"The last recorded progress was not preserved.");
+	Assert(
+		restored.CompletedUtc.HasValue,
+		"The reconciled operation was not made terminal.");
+	Assert(
+		workflowInvocations == 0,
+		"Restoring status incorrectly resumed the destructive workflow.");
+	Assert(
+		coordinator.GetActiveOperation() == null,
+		"The interrupted operation was incorrectly reported as active.");
+	Assert(
+		store.Snapshot?.State == UsbMediaOperationState.Failed,
+		"The reconciled terminal state was not persisted.");
+
+	return Task.CompletedTask;
+}
+
+static async Task PersistenceFailureDoesNotStopWorkflow()
+{
+	Int32 persistenceErrors = 0;
+	FakeUsbMediaOperationStore store = new FakeUsbMediaOperationStore
+	{
+		SaveException = new IOException("Fake persistence failure.")
+	};
+
+	using UsbMediaOperationCoordinator coordinator =
+		new UsbMediaOperationCoordinator(
+			new FakeUsbMediaWorkflow(),
+			store,
+			exception => persistenceErrors++);
+
+	UsbMediaOperationSnapshot started =
+		coordinator.Start(CreateBuildRequest());
+	List<UsbMediaOperationSnapshot> updates =
+		await ReadUntilTerminalAsync(coordinator, started.OperationId);
+
+	Assert(
+		updates[^1].State == UsbMediaOperationState.Succeeded,
+		"A status persistence failure stopped the workflow.");
+	Assert(
+		persistenceErrors > 0,
+		"The status persistence failure was not reported.");
+}
+
 static UsbMediaBuildRequest CreateBuildRequest(Boolean confirmed = true)
 {
 	return new UsbMediaBuildRequest
@@ -443,5 +568,34 @@ sealed class FakeUsbMediaWorkflow : IUsbMediaWorkflow
 				Summary = "Fake target is valid.",
 				ResolvedTarget = target
 			});
+	}
+}
+
+sealed class FakeUsbMediaOperationStore : IUsbMediaOperationStore
+{
+	public UsbMediaOperationSnapshot? Snapshot { get; set; }
+
+	public Exception? LoadException { get; init; }
+
+	public Exception? SaveException { get; init; }
+
+	public UsbMediaOperationSnapshot? Load()
+	{
+		if (LoadException != null)
+		{
+			throw LoadException;
+		}
+
+		return Snapshot;
+	}
+
+	public void Save(UsbMediaOperationSnapshot snapshot)
+	{
+		if (SaveException != null)
+		{
+			throw SaveException;
+		}
+
+		Snapshot = snapshot;
 	}
 }

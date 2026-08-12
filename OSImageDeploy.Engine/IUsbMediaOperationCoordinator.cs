@@ -10,6 +10,8 @@ namespace OSImageDeploy.Engine
 
 		UsbMediaOperationSnapshot? GetActiveOperation();
 
+		UsbMediaOperationSnapshot? GetLastOperation();
+
 		IAsyncEnumerable<UsbMediaOperationSnapshot> WatchAsync(
 			String operationId,
 			CancellationToken cancellationToken = default);
