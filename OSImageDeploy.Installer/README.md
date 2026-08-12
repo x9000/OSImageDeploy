@@ -55,6 +55,22 @@ dotnet build OSImageDeploy.Installer\OSImageDeploy.Installer.wixproj `
 
 - Signing can be forced off even when a thumbprint is supplied by setting
   `EnableCodeSigning=false`.
+- Signed installer validation must verify the project-owned binaries inside
+  each publish directory as well as the MSI. Signing the MSI alone does not
+  provide individual Authenticode signatures for extracted application and
+  service files.
+
+After a signed installer build, run the repeatable signature and ICE checks:
+
+```powershell
+.\Build\Test-SignedInstaller.ps1 `
+	-CertificateThumbprint <thumbprint>
+```
+
+The script requires Microsoft MsiVal2 and its standard `darice.cub` rules. The
+Windows SDK supplies the MsiVal2 installer beneath its versioned `bin\...\x86`
+directory. The script validates a temporary copy of the MSI so the signed build
+artifact remains untouched.
 
 ## Windows service policy
 
