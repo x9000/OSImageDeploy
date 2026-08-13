@@ -45,6 +45,10 @@ jobs:
       - name: Restore
         run: dotnet restore OSImageDeploy.slnx
 
+      - name: Create CI-only driver payload placeholders
+        shell: pwsh
+        run: ./Build/New-CiDriverPayloads.ps1
+
       - name: Build unsigned Release solution and MSI
         run: >-
           dotnet build OSImageDeploy.slnx
@@ -74,3 +78,9 @@ jobs:
           ./Build/Test-InstallerPackage.ps1
           -InstallerPath ./OSImageDeploy.Installer/bin/x64/Release/OSImageDeploySuite.msi
           -ExpectedSignatureStatus NotSigned
+
+      - name: Prevent publication of CI-only installer
+        shell: pwsh
+        run: |
+          Write-Host 'The CI MSI contains placeholder driver archives and is validation-only.'
+          Write-Host 'No installer artifact is uploaded by this workflow.'

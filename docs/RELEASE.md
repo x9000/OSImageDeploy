@@ -20,6 +20,18 @@ Do not build a release from a working tree containing uncommitted changes.
 
 ## 2. Run the unsigned CI-equivalent checks
 
+Validate the externally maintained OEM WinPE driver archives:
+
+```powershell
+.\Build\Test-DriverPayloads.ps1
+```
+
+These archives are intentionally excluded from Git because they are large,
+third-party binary inputs. A signed or distributable build must use the real
+archives. The validator rejects missing or corrupt archives, CI placeholders,
+and archives without driver INF files. Preserve its SHA-256 output with the
+release evidence.
+
 Use one timestamp throughout the build so every project and the MSI receive the
 same version:
 
@@ -46,8 +58,12 @@ dotnet run --project OSImageDeploy.Service.Tests\OSImageDeploy.Service.Tests.csp
 	-ExpectedSignatureStatus NotSigned
 ```
 
-These checks are automated by `.github/workflows/ci.yml`. They do not start the
-Windows service or perform a destructive USB operation.
+These checks are automated by `.github/workflows/ci.yml`. A clean GitHub runner
+does not have the externally maintained OEM archives, so the workflow creates
+small, conspicuously marked placeholders to exercise compilation and MSI
+structure. The resulting CI MSI is not deployable and is never uploaded as an
+artifact. CI does not validate the contents of the real driver payloads, start
+the Windows service, or perform a destructive USB operation.
 
 ## 3. Build and validate the signed MSI
 
@@ -109,6 +125,8 @@ Record the exact commit, MSI version, signer, timestamp, and SHA-256 hash:
 $msi = 'OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi'
 git rev-parse HEAD
 Get-FileHash -LiteralPath $msi -Algorithm SHA256
+Get-FileHash -LiteralPath OSImageDeploy\DellPEDrivers.zip -Algorithm SHA256
+Get-FileHash -LiteralPath OSImageDeploy\HPPEDrivers.zip -Algorithm SHA256
 Get-AuthenticodeSignature -LiteralPath $msi |
 	Select-Object Status, SignerCertificate, TimeStamperCertificate
 ```
