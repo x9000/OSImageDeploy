@@ -74,7 +74,7 @@
 		<MSBuild
 			Projects="$(WinPeClientProject)"
 			Targets="Restore;Publish"
-			Properties="Configuration=Release;PublishProfile=FolderProfile1;RuntimeIdentifier=win-x64;PublishDir=$(TargetDir)WinPEClient;EnableCodeSigning=false;BuildTimestampUtc=$(BuildTimestampUtc);BuildVersion=$(BuildVersion);BuildInformationalVersion=$(BuildInformationalVersion)" />
+			Properties="Configuration=Release;RuntimeIdentifier=win-x64;SelfContained=true;PublishDir=$(TargetDir)WinPEClient;EnableCodeSigning=false;BuildTimestampUtc=$(BuildTimestampUtc);BuildVersion=$(BuildVersion);BuildInformationalVersion=$(BuildInformationalVersion)" />
 	</Target>
 
 </Project>

@@ -107,15 +107,23 @@ testing:
 - service recovery configuration still reports two delayed restart actions;
 - upgrade, repair, uninstall, and downgrade rejection behave as documented.
 
-The live suite is:
+Run the repeatable installed-product validation from a normal, Medium-integrity
+PowerShell session:
 
 ```powershell
-dotnet run --project OSImageDeploy.Service.Tests\OSImageDeploy.Service.Tests.csproj `
-	--configuration Release --no-build -- --live
+.\Build\Test-InstalledProduct.ps1 `
+	-CertificateThumbprint <thumbprint> `
+	-InstallerPath .\OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi `
+	-RunLiveServiceChecks `
+	-LaunchUi
 ```
 
-It performs read-only USB enumeration and confirmation-guard checks. It does
-not start USB media creation.
+The script compares the installed registration to the MSI; validates service
+startup, identity, executable path, recovery configuration, project-owned
+signatures, and real OEM driver payloads; then exercises the live named pipe
+and opens the installed UI without shell elevation. Its live checks perform
+read-only USB enumeration and confirmation-guard checks. It does not start USB
+media creation or modify the WinPE cache.
 
 ## 5. Record and publish the artifact
 
