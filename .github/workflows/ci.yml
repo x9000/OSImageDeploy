@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-package:
+    name: Build, test, and package
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+
+      - name: Set one build timestamp
+        shell: pwsh
+        run: |
+          $timestamp = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffffff')
+          "BUILD_TIMESTAMP_UTC=$timestamp" >> $env:GITHUB_ENV
+
+      - name: Restore
+        run: dotnet restore OSImageDeploy.slnx
+
+      - name: Create CI-only driver payload placeholders
+        shell: pwsh
+        run: ./Build/New-CiDriverPayloads.ps1
+
+      - name: Build unsigned Release solution and MSI
+        run: >-
+          dotnet build OSImageDeploy.slnx
+          --configuration Release
+          --no-restore
+          --property:EnableCodeSigning=false
+          --property:BuildTimestampUtc=$env:BUILD_TIMESTAMP_UTC
+          --nodeReuse:false
+
+      - name: Run Engine checks
+        run: >-
+          dotnet run
+          --project OSImageDeploy.Engine.Tests/OSImageDeploy.Engine.Tests.csproj
+          --configuration Release
+          --no-build
+
+      - name: Run service contract and platform checks
+        run: >-
+          dotnet run
+          --project OSImageDeploy.Service.Tests/OSImageDeploy.Service.Tests.csproj
+          --configuration Release
+          --no-build
+
+      - name: Validate unsigned MSI structure
+        shell: pwsh
+        run: >-
+          ./Build/Test-InstallerPackage.ps1
+          -InstallerPath ./OSImageDeploy.Installer/bin/x64/Release/OSImageDeploySuite.msi
+          -ExpectedSignatureStatus NotSigned
+
+      - name: Prevent publication of CI-only installer
+        shell: pwsh
+        run: |
+          Write-Host 'The CI MSI contains placeholder driver archives and is validation-only.'
+          Write-Host 'No installer artifact is uploaded by this workflow.'
