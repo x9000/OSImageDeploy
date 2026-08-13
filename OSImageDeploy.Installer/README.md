@@ -112,23 +112,23 @@ Install or upgrade the MSI from an elevated administrator context. Silent
 per-machine upgrades cannot prompt for elevation and fail with Windows Installer
 error 1730 when started from a non-elevated console.
 
-After installation, verify that:
-
-- the product version is current in Installed Apps;
-- `OSImageDeploy.Service` is running automatically as LocalSystem;
-- `sc.exe qfailure OSImageDeploy.Service` reports two 120-second restart
-  actions and an 86400-second reset period;
-- the live service checks pass from a normal, non-elevated console:
+After installation, run the repeatable smoke test from a normal,
+Medium-integrity PowerShell session:
 
 ```powershell
-dotnet run --project OSImageDeploy.Service.Tests\OSImageDeploy.Service.Tests.csproj `
-	--configuration Release -- --live
+.\Build\Test-InstalledProduct.ps1 `
+	-CertificateThumbprint <thumbprint> `
+	-InstallerPath .\OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi `
+	-RunLiveServiceChecks `
+	-LaunchUi
 ```
 
-The live checks call service status, read-only USB enumeration, active- and
-last-operation status, and WinPE cache status. They also verify that unconfirmed
-USB-build and cache-clear requests are rejected. They do not start a destructive
-USB build.
+The script checks Installed Apps registration, service runtime and recovery
+policy, installed signatures and OEM payloads, Medium-integrity named-pipe
+access, and non-elevated UI startup. The live checks call service status,
+read-only USB enumeration, active- and last-operation status, and WinPE cache
+status. They also verify that unconfirmed USB-build and cache-clear requests are
+rejected. They do not start a destructive USB build or modify the WinPE cache.
 
 ## Versioning and upgrades
 
