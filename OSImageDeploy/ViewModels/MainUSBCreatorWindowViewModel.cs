@@ -46,6 +46,7 @@ namespace ViewModels
 			await PerformPrereqTestingAsync();
 			await PopulateUSBDriveListAsync();
 			await RefreshWinPeCacheStatusAsync();
+			await RefreshWinPeDriverPackagesAsync();
 			await ReconnectToActiveUsbMediaBuildAsync();
 		}
 
@@ -58,6 +59,8 @@ namespace ViewModels
 		private String _subInfoTextBlockText = "";
 		private String _winPeCacheStatusText = "WinPE cache: Checking...";
 		private String _winPeCacheDetailsText = "";
+		private String _winPeDriverPackagesStatusText =
+			"Optional WinPE drivers: Checking...";
 		private String _activeOperationId = "";
 		private String _titleTextBlockText = $"OS Image Deployment Tool v{Assembly.GetEntryAssembly().GetName().Version.Major}.{Assembly.GetEntryAssembly().GetName().Version.Minor}.{Assembly.GetEntryAssembly().GetName().Version.Build}";
 		private int _usbComboxSelectedItemIndex;
@@ -88,6 +91,8 @@ namespace ViewModels
 		public ObservableCollection<PreCheckModel> PreReqChecks { get; set; } = new ObservableCollection<PreCheckModel>();
 		public ObservableCollection<UsbTargetDescriptor> ListOfUSBDrives { get; set; } =
 			new ObservableCollection<UsbTargetDescriptor>();
+		public ObservableCollection<WinPeDriverPackageSelectionModel>
+			WinPeDriverPackages { get; } = new();
 
 		#endregion
 
@@ -155,6 +160,16 @@ namespace ViewModels
 			{
 				_winPeCacheDetailsText = value;
 				NotifyPropertyChanged(nameof(WinPeCacheDetailsText));
+			}
+		}
+
+		public String WinPeDriverPackagesStatusText
+		{
+			get => _winPeDriverPackagesStatusText;
+			set
+			{
+				_winPeDriverPackagesStatusText = value;
+				NotifyPropertyChanged(nameof(WinPeDriverPackagesStatusText));
 			}
 		}
 
@@ -330,6 +345,49 @@ namespace ViewModels
 
 				AppLog.Error(
 					"Failed to read WinPE media cache status.",
+					exception);
+			}
+		}
+
+		private async Task RefreshWinPeDriverPackagesAsync()
+		{
+			try
+			{
+				IReadOnlyList<WinPeDriverPackageDescriptor> packages =
+					await _serviceClient.GetWinPeDriverPackagesAsync();
+
+				HashSet<String> selectedIds = WinPeDriverPackages
+					.Where(package => package.IsSelected)
+					.Select(package => package.Package.PackageId)
+					.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+				WinPeDriverPackages.Clear();
+
+				foreach (WinPeDriverPackageDescriptor package in packages)
+				{
+					WinPeDriverPackageSelectionModel selection =
+						new WinPeDriverPackageSelectionModel
+						{
+							Package = package
+						};
+					selection.IsSelected =
+						package.IsAvailable &&
+						selectedIds.Contains(package.PackageId);
+					WinPeDriverPackages.Add(selection);
+				}
+
+				Int32 availableCount = packages.Count(package => package.IsAvailable);
+				WinPeDriverPackagesStatusText = availableCount == 0
+					? "Optional WinPE drivers: None prepared. Use the official links below and ask an administrator to import a package."
+					: $"Optional WinPE drivers: {availableCount} package(s) available. Select only those required for this USB.";
+			}
+			catch (Exception exception)
+			{
+				WinPeDriverPackages.Clear();
+				WinPeDriverPackagesStatusText =
+					"Optional WinPE driver packages could not be read from the service.";
+				AppLog.Error(
+					"Failed to retrieve WinPE driver packages from the service.",
 					exception);
 			}
 		}
@@ -606,6 +664,17 @@ namespace ViewModels
 				return;
 			}
 
+			List<WinPeDriverPackageSelectionModel> selectedDriverPackages =
+				WinPeDriverPackages
+					.Where(package => package.IsSelected)
+					.ToList();
+			String driverPackageSummary = selectedDriverPackages.Count == 0
+				? "Optional WinPE drivers: None"
+				: "Optional WinPE drivers: " + String.Join(
+					", ",
+					selectedDriverPackages.Select(
+						package => package.Package.DisplayName));
+
 			MessageBoxResult confirmation = MessageBox.Show(
 				$"All existing data on the following device will be permanently erased:" +
 				Environment.NewLine +
@@ -613,6 +682,8 @@ namespace ViewModels
 				selectedTarget.DisplayName +
 				Environment.NewLine +
 				$"Size: {selectedTarget.SizeBytes / 1024D / 1024D / 1024D:F1} GB" +
+				Environment.NewLine +
+				driverPackageSummary +
 				Environment.NewLine +
 				Environment.NewLine +
 				"Continue with USB creation?",
@@ -638,6 +709,9 @@ namespace ViewModels
 						new UsbMediaBuildRequest
 						{
 							Target = selectedTarget,
+							WinPeDriverPackageIds = selectedDriverPackages
+								.Select(package => package.Package.PackageId)
+								.ToList(),
 							DestructiveActionConfirmed = true
 						});
 
@@ -771,6 +845,7 @@ namespace ViewModels
 			RefreshUSBButtonEnabled = true;
 
 			await RefreshWinPeCacheStatusAsync();
+			await RefreshWinPeDriverPackagesAsync();
 			await PopulateUSBDriveListAsync();
 		}
 

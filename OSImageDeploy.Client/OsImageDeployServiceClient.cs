@@ -93,20 +93,48 @@ namespace OSImageDeploy.Client
 
 			try
 			{
+				StartUsbMediaBuildRequest message =
+					new StartUsbMediaBuildRequest
+					{
+						SelectedTarget =
+							GrpcTargetMapper.ToMessage(request.Target),
+						DestructiveActionConfirmed =
+							request.DestructiveActionConfirmed,
+						RebuildWinPeCache = request.RebuildWinPeCache
+					};
+
+				message.WinPeDriverPackageIds.AddRange(
+					request.WinPeDriverPackageIds);
+
 				UsbMediaOperationUpdate response =
 					await _client.StartUsbMediaBuildAsync(
-						new StartUsbMediaBuildRequest
-						{
-							SelectedTarget =
-								GrpcTargetMapper.ToMessage(request.Target),
-							DestructiveActionConfirmed =
-								request.DestructiveActionConfirmed,
-							RebuildWinPeCache = request.RebuildWinPeCache
-						},
+						message,
 						deadline: DateTime.UtcNow.Add(RequestTimeout),
 						cancellationToken: cancellationToken);
 
 				return GrpcOperationMapper.ToSnapshot(response);
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
+		public async Task<IReadOnlyList<WinPeDriverPackageDescriptor>>
+			GetWinPeDriverPackagesAsync(
+				CancellationToken cancellationToken = default)
+		{
+			try
+			{
+				ListWinPeDriverPackagesResponse response =
+					await _client.ListWinPeDriverPackagesAsync(
+						new ListWinPeDriverPackagesRequest(),
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				return response.Packages
+					.Select(GrpcWinPeDriverPackageMapper.ToDescriptor)
+					.ToList();
 			}
 			catch (RpcException exception)
 			{

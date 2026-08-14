@@ -16,6 +16,7 @@ service OsImageDeployControl {
 	rpc CancelUsbMediaBuild (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
 	rpc GetWinPeCacheStatus (GetWinPeCacheStatusRequest) returns (WinPeCacheStatusResponse);
 	rpc ClearWinPeCache (ClearWinPeCacheRequest) returns (WinPeCacheStatusResponse);
+	rpc ListWinPeDriverPackages (ListWinPeDriverPackagesRequest) returns (ListWinPeDriverPackagesResponse);
 }
 
 message GetServiceStatusRequest {
@@ -66,6 +67,28 @@ message StartUsbMediaBuildRequest {
 	UsbTarget selected_target = 1;
 	bool destructive_action_confirmed = 2;
 	bool rebuild_win_pe_cache = 3;
+	repeated string win_pe_driver_package_ids = 4;
+}
+
+message ListWinPeDriverPackagesRequest {
+}
+
+message ListWinPeDriverPackagesResponse {
+	repeated WinPeDriverPackage packages = 1;
+}
+
+message WinPeDriverPackage {
+	string package_id = 1;
+	string display_name = 2;
+	string manufacturer = 3;
+	string source_version = 4;
+	string source_page_url = 5;
+	string preparation_instructions = 6;
+	bool is_available = 7;
+	int32 driver_count = 8;
+	int64 archive_size_bytes = 9;
+	string archive_sha256 = 10;
+	string status_message = 11;
 }
 
 message UsbMediaOperationRequest {

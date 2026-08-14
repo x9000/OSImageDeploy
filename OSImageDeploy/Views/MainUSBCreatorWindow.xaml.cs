@@ -9,6 +9,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Windows.Navigation;
+using System.Diagnostics;
 
 namespace OSImageDeploy.Views
 {
@@ -28,6 +30,25 @@ namespace OSImageDeploy.Views
 		{
 			base.OnMouseDown(e);
 			this.DragMove();
+		}
+
+		private void OpenExternalLink(
+			object sender,
+			RequestNavigateEventArgs e)
+		{
+			if (e.Uri == null ||
+				!e.Uri.IsAbsoluteUri ||
+				e.Uri.Scheme != Uri.UriSchemeHttps)
+			{
+				return;
+			}
+
+			Process.Start(
+				new ProcessStartInfo(e.Uri.AbsoluteUri)
+				{
+					UseShellExecute = true
+				});
+			e.Handled = true;
 		}
     }
 }

@@ -1,5 +1,6 @@
 using Grpc.Core;
 using Grpc.Net.Client;
+using Google.Protobuf;
 using OSImageDeploy.Client;
 using OSImageDeploy.Contracts;
 using OSImageDeploy.Platform.Windows;
@@ -130,6 +131,53 @@ Assert(
 	"Cache archive size changed.");
 
 Console.WriteLine("PASS: WinPE cache gRPC contract round trip.");
+
+WinPeDriverPackageDescriptor driverPackageSnapshot =
+	new WinPeDriverPackageDescriptor
+	{
+		PackageId = "example-winpe",
+		DisplayName = "Example WinPE drivers",
+		Manufacturer = "Example",
+		SourceVersion = "2026.08",
+		SourcePageUrl = "https://example.com/winpe",
+		PreparationInstructions = "Extract and prepare the package.",
+		IsAvailable = true,
+		DriverCount = 12,
+		ArchiveSizeBytes = 3456789,
+		ArchiveSha256 = "ABCDEF",
+		StatusMessage = "Available."
+	};
+WinPeDriverPackageDescriptor driverPackageRoundTrip =
+	GrpcWinPeDriverPackageMapper.ToDescriptor(
+		GrpcWinPeDriverPackageMapper.ToMessage(driverPackageSnapshot));
+
+Assert(
+	driverPackageRoundTrip.PackageId == driverPackageSnapshot.PackageId,
+	"Driver package ID changed.");
+Assert(
+	driverPackageRoundTrip.SourceVersion == driverPackageSnapshot.SourceVersion,
+	"Driver package version changed.");
+Assert(
+	driverPackageRoundTrip.SourcePageUrl == driverPackageSnapshot.SourcePageUrl,
+	"Driver package source URL changed.");
+Assert(
+	driverPackageRoundTrip.IsAvailable &&
+	driverPackageRoundTrip.DriverCount == 12 &&
+	driverPackageRoundTrip.ArchiveSizeBytes == 3456789,
+	"Driver package availability evidence changed.");
+
+StartUsbMediaBuildRequest driverSelectionRequest = new();
+driverSelectionRequest.WinPeDriverPackageIds.Add("dell-winpe");
+driverSelectionRequest.WinPeDriverPackageIds.Add("example-winpe");
+StartUsbMediaBuildRequest parsedDriverSelectionRequest =
+	StartUsbMediaBuildRequest.Parser.ParseFrom(
+		driverSelectionRequest.ToByteArray());
+Assert(
+	parsedDriverSelectionRequest.WinPeDriverPackageIds.SequenceEqual(
+		new[] { "dell-winpe", "example-winpe" }),
+	"Selected driver package IDs changed across the gRPC contract.");
+
+Console.WriteLine("PASS: WinPE driver package gRPC contract round trip.");
 
 Boolean targetResolverCalled = false;
 Boolean preflightFailureObserved = false;
@@ -332,6 +380,19 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 	Assert(!status.ReadOnly, "The service did not report media-build support.");
 
 	Console.WriteLine("PASS: Live named-pipe service status call.");
+
+	ListWinPeDriverPackagesResponse driverPackages =
+		await client.ListWinPeDriverPackagesAsync(
+			new ListWinPeDriverPackagesRequest(),
+			deadline: DateTime.UtcNow.AddSeconds(10));
+
+	Assert(
+		driverPackages.Packages.Any(package => package.PackageId == "dell-winpe") &&
+		driverPackages.Packages.Any(package => package.PackageId == "hp-winpe"),
+		"The service driver-package catalog omitted built-in OEM guidance.");
+
+	Console.WriteLine(
+		$"PASS: Live WinPE driver package catalog ({driverPackages.Packages.Count} package(s)).");
 
 	ListEligibleUsbTargetsResponse eligibleTargets =
 		await client.ListEligibleUsbTargetsAsync(
