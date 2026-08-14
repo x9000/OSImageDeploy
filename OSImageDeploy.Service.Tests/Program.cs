@@ -6,6 +6,8 @@ using OSImageDeploy.Platform.Windows;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
 using Utilities;
+using System.IO.Compression;
+using System.Text.Json;
 using ContractOperationProgress = OSImageDeploy.Contracts.OperationProgress;
 using ContractOperationState = OSImageDeploy.Contracts.UsbMediaOperationState;
 
@@ -203,6 +205,113 @@ finally
 
 Console.WriteLine("PASS: Windows WinPE cache status and clear boundary.");
 
+String driverPackageStoreDirectory = Path.Combine(
+	Path.GetTempPath(),
+	$"OSImageDeploy-driver-package-test-{Guid.NewGuid():N}");
+
+try
+{
+	CreateDriverPackage(
+		driverPackageStoreDirectory,
+		"dell-winpe",
+		"Dell test WinPE drivers",
+		"Dell",
+		"A01");
+	CreateDriverPackage(
+		driverPackageStoreDirectory,
+		"example-winpe",
+		"Example manufacturer WinPE drivers",
+		"Example Manufacturer",
+		"2026.08");
+	CreateDriverPackage(
+		driverPackageStoreDirectory,
+		"unsafe-winpe",
+		"Unsafe test package",
+		"Test",
+		"1",
+		unsafeArchivePath: true);
+
+	WindowsWinPeDriverPackageStore packageStore =
+		new WindowsWinPeDriverPackageStore(driverPackageStoreDirectory);
+	IReadOnlyList<WinPeDriverPackageDescriptor> packages =
+		packageStore.GetPackages();
+
+	WinPeDriverPackageDescriptor dellPackage = packages.Single(
+		package => package.PackageId == "dell-winpe");
+	Assert(dellPackage.IsAvailable, "The prepared Dell package was unavailable.");
+	Assert(dellPackage.DriverCount == 1, "The Dell INF count was incorrect.");
+	Assert(
+		dellPackage.SourcePageUrl.StartsWith("https://www.dell.com/"),
+		"The Dell source guidance was not applied.");
+	Assert(
+		!String.IsNullOrWhiteSpace(dellPackage.ArchiveSha256),
+		"The Dell archive hash was not reported.");
+
+	WinPeDriverPackageDescriptor hpPackage = packages.Single(
+		package => package.PackageId == "hp-winpe");
+	Assert(!hpPackage.IsAvailable, "An unprepared HP package was available.");
+	Assert(
+		hpPackage.SourcePageUrl.StartsWith("https://ftp.ext.hp.com/"),
+		"The HP source guidance was not reported.");
+
+	WinPeDriverPackageDescriptor customPackage = packages.Single(
+		package => package.PackageId == "example-winpe");
+	Assert(customPackage.IsAvailable, "The custom package was unavailable.");
+	Assert(
+		customPackage.Manufacturer == "Example Manufacturer",
+		"The custom manufacturer changed.");
+
+	WinPeDriverPackageDescriptor unsafePackage = packages.Single(
+		package => package.PackageId == "unsafe-winpe");
+	Assert(unsafePackage.IsAvailable == false, "An unsafe archive was available.");
+	Assert(
+		unsafePackage.StatusMessage.Contains("unsafe path"),
+		"The unsafe archive reason was not reported.");
+
+	IReadOnlyList<ResolvedWinPeDriverPackage> selectedPackages =
+		packageStore.ResolveSelection(
+			new[] { "example-winpe", "dell-winpe" });
+	Assert(selectedPackages.Count == 2, "The selected packages were not resolved.");
+	Assert(
+		selectedPackages.All(package => File.Exists(package.ArchivePath)),
+		"A selected archive path does not exist.");
+
+	Boolean duplicateRejected = false;
+
+	try
+	{
+		packageStore.ResolveSelection(new[] { "dell-winpe", "DELL-WINPE" });
+	}
+	catch (ArgumentException)
+	{
+		duplicateRejected = true;
+	}
+
+	Assert(duplicateRejected, "A duplicate package selection was accepted.");
+
+	Boolean unavailableRejected = false;
+
+	try
+	{
+		packageStore.ResolveSelection(new[] { "hp-winpe" });
+	}
+	catch (InvalidDataException)
+	{
+		unavailableRejected = true;
+	}
+
+	Assert(unavailableRejected, "An unavailable package selection was accepted.");
+}
+finally
+{
+	if (Directory.Exists(driverPackageStoreDirectory))
+	{
+		Directory.Delete(driverPackageStoreDirectory, recursive: true);
+	}
+}
+
+Console.WriteLine("PASS: external WinPE driver package store and selection.");
+
 if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 {
 	using GrpcChannel channel = NamedPipeGrpcChannelFactory.Create();
@@ -328,4 +437,41 @@ static void Assert(Boolean condition, String message)
 	{
 		throw new InvalidOperationException(message);
 	}
+}
+
+static void CreateDriverPackage(
+	String storeDirectory,
+	String packageId,
+	String displayName,
+	String manufacturer,
+	String sourceVersion,
+	Boolean unsafeArchivePath = false)
+{
+	String packageDirectory = Path.Combine(storeDirectory, packageId);
+	Directory.CreateDirectory(packageDirectory);
+
+	WinPeDriverPackageManifest manifest =
+		new WinPeDriverPackageManifest
+		{
+			PackageId = packageId,
+			DisplayName = displayName,
+			Manufacturer = manufacturer,
+			SourceVersion = sourceVersion,
+			PreparedUtc = DateTimeOffset.UtcNow
+		};
+
+	File.WriteAllText(
+		Path.Combine(packageDirectory, "package.json"),
+		JsonSerializer.Serialize(manifest));
+
+	using ZipArchive archive = ZipFile.Open(
+		Path.Combine(packageDirectory, "drivers.zip"),
+		ZipArchiveMode.Create);
+	ZipArchiveEntry entry = archive.CreateEntry(
+		unsafeArchivePath
+			? "../unsafe.inf"
+			: "drivers/test-driver.inf");
+
+	using StreamWriter writer = new StreamWriter(entry.Open());
+	writer.WriteLine("[Version]");
 }

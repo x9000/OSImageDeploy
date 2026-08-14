@@ -8,6 +8,9 @@ Production build, signing, MSI validation, installed-product testing, and
 release steps are documented in [docs/RELEASE.md](docs/RELEASE.md).
 Completed release-level hardware tests are recorded separately in
 [docs/VALIDATION.md](docs/VALIDATION.md).
-Release builds also require the externally maintained Dell and HP WinPE driver
-archives described there; CI uses non-deployable placeholders and never
-publishes its MSI.
+Preparation of operator-supplied OEM and custom WinPE driver packages is
+documented in [docs/WINPE-DRIVERS.md](docs/WINPE-DRIVERS.md).
+The current 1.83.1056 build still requires the externally maintained Dell and
+HP archives described in the release procedure. CI uses non-deployable
+placeholders and never publishes its MSI. A subsequent release will replace
+that packaging with the external driver-package workflow.

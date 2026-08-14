@@ -40,6 +40,8 @@ $buildTimestampUtc = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffffff')
 
 dotnet restore OSImageDeploy.slnx
 
+.\Build\Test-WinPeDriverPackageTools.ps1
+
 dotnet build OSImageDeploy.slnx `
 	--configuration Release `
 	--no-restore `
@@ -113,7 +115,7 @@ PowerShell session:
 ```powershell
 .\Build\Test-InstalledProduct.ps1 `
 	-CertificateThumbprint <thumbprint> `
-	-InstallerPath .\OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi `
+	-InstallerPath .\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi `
 	-RunLiveServiceChecks `
 	-LaunchUi
 ```
@@ -132,7 +134,7 @@ input. From an elevated administrator PowerShell session, run:
 
 ```powershell
 .\Build\Test-InstallerLifecycle.ps1 `
-	-CurrentInstallerPath .\OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi `
+	-CurrentInstallerPath .\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi `
 	-OlderInstallerPath <path-to-older-signed-msi> `
 	-CertificateThumbprint <thumbprint> `
 	-ConfirmLifecycleTest
@@ -160,7 +162,7 @@ After the elevated lifecycle harness passes, rerun
 Record the exact commit, MSI version, signer, timestamp, and SHA-256 hash:
 
 ```powershell
-$msi = 'OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi'
+$msi = 'OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'
 git rev-parse HEAD
 Get-FileHash -LiteralPath $msi -Algorithm SHA256
 Get-FileHash -LiteralPath OSImageDeploy\DellPEDrivers.zip -Algorithm SHA256
