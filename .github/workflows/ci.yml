@@ -66,6 +66,10 @@ jobs:
           }
           Write-Host 'Lifecycle confirmation guard passed.'
 
+      - name: Validate external WinPE driver package tooling
+        shell: pwsh
+        run: ./Build/Test-WinPeDriverPackageTools.ps1
+
       - name: Build unsigned Release solution and MSI
         run: >-
           dotnet build OSImageDeploy.slnx

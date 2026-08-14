@@ -2,7 +2,7 @@
 param
 (
 	[string] $InstallerPath =
-		(Join-Path $PSScriptRoot '..\OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi'),
+		(Join-Path $PSScriptRoot '..\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'),
 
 	[ValidateSet('Any', 'NotSigned', 'Valid')]
 	[string] $ExpectedSignatureStatus = 'Any'

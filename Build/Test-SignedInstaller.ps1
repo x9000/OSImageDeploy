@@ -5,7 +5,7 @@ param
 	[string] $CertificateThumbprint,
 
 	[string] $InstallerPath =
-		(Join-Path $PSScriptRoot '..\OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi'),
+		(Join-Path $PSScriptRoot '..\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'),
 
 	[string] $PublishRoot =
 		(Join-Path $env:TEMP 'OSImageDeploy.Installer\Release\publish'),
