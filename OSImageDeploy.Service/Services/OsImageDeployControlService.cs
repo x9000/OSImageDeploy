@@ -1,6 +1,7 @@
 using Grpc.Core;
 using OSImageDeploy.Contracts;
 using OSImageDeploy.Engine;
+using OSImageDeploy.Platform.Windows;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
 using System.Reflection;
@@ -14,6 +15,7 @@ namespace OSImageDeploy.Service.Services
 		private readonly IUsbTargetValidator _targetValidator;
 		private readonly IUsbMediaOperationCoordinator _operationCoordinator;
 		private readonly IWinPeCacheService _winPeCacheService;
+		private readonly WindowsWinPeDriverPackageStore _driverPackageStore;
 		private readonly ILogger<OsImageDeployControlService> _logger;
 
 		public OsImageDeployControlService(
@@ -21,12 +23,14 @@ namespace OSImageDeploy.Service.Services
 			IUsbTargetValidator targetValidator,
 			IUsbMediaOperationCoordinator operationCoordinator,
 			IWinPeCacheService winPeCacheService,
+			WindowsWinPeDriverPackageStore driverPackageStore,
 			ILogger<OsImageDeployControlService> logger)
 		{
 			_targetDiscovery = targetDiscovery;
 			_targetValidator = targetValidator;
 			_operationCoordinator = operationCoordinator;
 			_winPeCacheService = winPeCacheService;
+			_driverPackageStore = driverPackageStore;
 			_logger = logger;
 		}
 
@@ -196,12 +200,19 @@ namespace OSImageDeploy.Service.Services
 
 			try
 			{
+				IReadOnlyList<ResolvedWinPeDriverPackage> driverPackages =
+					_driverPackageStore.ResolveSelection(
+						request.WinPeDriverPackageIds);
+
 				UsbMediaOperationSnapshot operation =
 					_operationCoordinator.Start(
 						new UsbMediaBuildRequest
 						{
 							Target = selectedTarget,
 							RebuildWinPeCache = request.RebuildWinPeCache,
+							WinPeDriverPackageIds = driverPackages
+								.Select(package => package.Descriptor.PackageId)
+								.ToList(),
 							DestructiveActionConfirmed = true
 						});
 
@@ -228,6 +239,38 @@ namespace OSImageDeploy.Service.Services
 					new Status(
 						StatusCode.InvalidArgument,
 						exception.Message));
+			}
+			catch (InvalidDataException exception)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.FailedPrecondition,
+						exception.Message));
+			}
+		}
+
+		public override Task<ListWinPeDriverPackagesResponse>
+			ListWinPeDriverPackages(
+				ListWinPeDriverPackagesRequest request,
+				ServerCallContext context)
+		{
+			try
+			{
+				ListWinPeDriverPackagesResponse response = new();
+				response.Packages.AddRange(
+					_driverPackageStore.GetPackages()
+						.Select(GrpcWinPeDriverPackageMapper.ToMessage));
+				return Task.FromResult(response);
+			}
+			catch (Exception exception)
+			{
+				_logger.LogError(
+					exception,
+					"Failed to read the WinPE driver package catalog.");
+				throw new RpcException(
+					new Status(
+						StatusCode.Internal,
+						"The WinPE driver package catalog could not be read."));
 			}
 		}
 

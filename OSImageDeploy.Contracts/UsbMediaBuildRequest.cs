@@ -6,6 +6,9 @@ namespace OSImageDeploy.Contracts
 
 		public Boolean RebuildWinPeCache { get; init; }
 
+		public IReadOnlyList<String> WinPeDriverPackageIds { get; init; } =
+			Array.Empty<String>();
+
 		public Boolean DestructiveActionConfirmed { get; init; }
 	}
 }

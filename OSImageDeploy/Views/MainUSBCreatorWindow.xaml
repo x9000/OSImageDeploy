@@ -94,7 +94,10 @@
                 <TextBlock Text="{Binding TitleTextBlockText}" FontWeight="Bold" HorizontalAlignment="Center"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Grid.Row="1" Width="600">
-                <StackPanel Visibility="{Binding MainStackPanelVisibility}">
+                <ScrollViewer Visibility="{Binding MainStackPanelVisibility}"
+                              MaxHeight="455"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,8,0">
                     <ComboBox x:Name="USBListComboBox" ItemsSource="{Binding ListOfUSBDrives}" DisplayMemberPath="DisplayName" Margin="0,0,0,10" SelectedIndex="{Binding USBComboxSelectedItemIndex}" Width="420"/>
                     <Button x:Name="CreateUSBButton" Margin="0,5,0,5" IsEnabled="{Binding CreateUSBButtonEnabled}" Command="{Binding CreateUSBCommand, Mode=OneWay}" CommandParameter="{Binding SelectedItem, ElementName=USBListComboBox}">
                         <StackPanel>
@@ -137,7 +140,59 @@
                                     Padding="10,6"/>
                         </StackPanel>
                     </Border>
-                </StackPanel>
+                    <Border Background="#26000000"
+                            BorderBrush="#60FFFFFF"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Margin="0,5,0,5"
+                            Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="Optional manufacturer WinPE drivers"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding WinPeDriverPackagesStatusText}"
+                                       FontSize="13"
+                                       Margin="0,4,0,8"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"/>
+                            <ScrollViewer MaxHeight="190"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding WinPeDriverPackages}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#30FFFFFF"
+                                                    BorderThickness="0,1,0,0"
+                                                    Padding="4,8">
+                                                <StackPanel>
+                                                    <CheckBox Content="{Binding Package.DisplayName}"
+                                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                              IsEnabled="{Binding Package.IsAvailable}"
+                                                              FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding Package.StatusMessage}"
+                                                               Margin="20,2,0,0"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Margin="20,2,0,0"
+                                                               TextWrapping="Wrap">
+                                                        <Hyperlink NavigateUri="{Binding Package.SourcePageUrl}"
+                                                                   RequestNavigate="OpenExternalLink">
+                                                            Official download and preparation page
+                                                        </Hyperlink>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Package.PreparationInstructions}"
+                                                               Margin="20,2,0,0"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+                    </StackPanel>
+                </ScrollViewer>
                 <StackPanel Grid.Row="1" Grid.Column="1" Visibility="{Binding PrereqStackPanelVisibility}">
                     <TextBlock Text="Requirements" FontWeight="Bold" HorizontalAlignment="Center"/>
                     <Border BorderBrush="Gray" BorderThickness="0" Margin="0,5,0,5">

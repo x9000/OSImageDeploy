@@ -50,6 +50,7 @@ builder.Services.AddSingleton<WindowsUsbMediaWorkflow>();
 builder.Services.AddSingleton<IUsbMediaWorkflow>(services =>
 	services.GetRequiredService<WindowsUsbMediaWorkflow>());
 builder.Services.AddSingleton<WinPeMediaCacheManager>();
+builder.Services.AddSingleton<WindowsWinPeDriverPackageStore>();
 builder.Services.AddSingleton<IWinPeCacheService>(services =>
 	services.GetRequiredService<WindowsUsbMediaWorkflow>());
 builder.Services.AddSingleton<IUsbMediaOperationStore,

@@ -5,8 +5,15 @@ binaries are not stored in Git and will not be embedded in future public-safe
 installers. A package is included in WinPE only when it is available in the
 service package store and explicitly selected for a USB build.
 
-This document describes the package format and preparation foundation. The
-service and desktop selection workflow will be added in the next milestone.
+This document describes the package format and preparation workflow. The
+service publishes the catalog to the non-elevated desktop UI, which shows
+available packages as optional selections and unavailable built-in entries as
+download and preparation guidance.
+
+Selected package IDs are re-read and revalidated by the service immediately
+before it starts a USB operation. The current integration milestone carries
+that guarded selection through the service boundary; injection into the WinPE
+image and removal of the legacy embedded OEM archives are the next milestone.
 
 ## Package store
 
@@ -32,8 +39,9 @@ DriverPackages\
 ```
 
 The default store is restricted to LocalSystem and administrators. The desktop
-UI will receive package metadata through the service and must never send an
-arbitrary archive or filesystem path to the privileged build operation.
+UI receives package metadata through the service and sends only selected stable
+IDs. It never sends an arbitrary archive or filesystem path to the privileged
+build operation.
 
 ## Prepare a package
 
