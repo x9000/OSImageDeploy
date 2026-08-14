@@ -130,6 +130,14 @@ read-only USB enumeration, active- and last-operation status, and WinPE cache
 status. They also verify that unconfirmed USB-build and cache-clear requests are
 rejected. They do not start a destructive USB build or modify the WinPE cache.
 
+For release candidates, also run `Build\Test-InstallerLifecycle.ps1` from an
+elevated administrator session with the current signed MSI and a signed older
+MSI sharing the same UpgradeCode. The guarded harness validates repair,
+downgrade rejection, uninstall cleanup, and clean reinstall, and attempts to
+restore the current MSI if an intermediate stage fails. See
+[`docs/RELEASE.md`](../docs/RELEASE.md) for the full procedure and validation
+boundaries.
+
 ## Versioning and upgrades
 
 The MSI uses the existing upgrade code so it can replace installations created

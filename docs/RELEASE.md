@@ -125,6 +125,36 @@ and opens the installed UI without shell elevation. Its live checks perform
 read-only USB enumeration and confirmation-guard checks. It does not start USB
 media creation or modify the WinPE cache.
 
+### Installer lifecycle validation
+
+Keep a signed, timestamped older release with the same UpgradeCode as a test
+input. From an elevated administrator PowerShell session, run:
+
+```powershell
+.\Build\Test-InstallerLifecycle.ps1 `
+	-CurrentInstallerPath .\OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi `
+	-OlderInstallerPath <path-to-older-signed-msi> `
+	-CertificateThumbprint <thumbprint> `
+	-ConfirmLifecycleTest
+```
+
+The lifecycle harness establishes the current version, repairs it, verifies
+that the older MSI is rejected, uninstalls and checks removal of the Installed
+Apps registration, Windows service, installation directory, and Start menu
+shortcut, then cleanly reinstalls the current MSI. It preserves verbose MSI
+logs and a JSON evidence summary under the user temporary directory. Recovery
+logic attempts to restore the current MSI if a stage fails after product state
+has changed.
+
+The service-created `%ProgramData%\OSImageDeploy` data is deliberately outside
+the MSI component inventory and is retained across uninstall/reinstall. This
+preserves the last operation result and diagnostic state; it does not preserve
+a disk selection, build request, or destructive-operation confirmation.
+
+After the elevated lifecycle harness passes, rerun
+`Test-InstalledProduct.ps1` from Medium integrity with
+`-RunLiveServiceChecks -LaunchUi`.
+
 ## 5. Record and publish the artifact
 
 Record the exact commit, MSI version, signer, timestamp, and SHA-256 hash:

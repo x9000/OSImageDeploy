@@ -49,6 +49,23 @@ jobs:
         shell: pwsh
         run: ./Build/New-CiDriverPayloads.ps1
 
+      - name: Validate installer lifecycle confirmation guard
+        shell: pwsh
+        run: |
+          try {
+            ./Build/Test-InstallerLifecycle.ps1 `
+              -CurrentInstallerPath ./not-used-current.msi `
+              -OlderInstallerPath ./not-used-older.msi `
+              -CertificateThumbprint NOT-USED
+            throw 'Lifecycle confirmation guard did not reject an unconfirmed run.'
+          }
+          catch {
+            if ($_.Exception.Message -ne 'Lifecycle testing was not confirmed. Supply -ConfirmLifecycleTest.') {
+              throw
+            }
+          }
+          Write-Host 'Lifecycle confirmation guard passed.'
+
       - name: Build unsigned Release solution and MSI
         run: >-
           dotnet build OSImageDeploy.slnx
