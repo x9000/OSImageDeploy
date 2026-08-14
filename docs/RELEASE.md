@@ -188,6 +188,10 @@ one, identify the exact physical disk and obtain explicit confirmation. Record:
 Never infer permission for this step from approval to build, sign, install, or
 release the software.
 
+Record completed hardware tests in `docs/VALIDATION.md`. Identify the exact
+release artifact and hardware, and state the limits of the result so a single
+successful configuration is not presented as universal compatibility.
+
 ## Rollback
 
 If an upgrade fails, preserve the MSI log and confirm whether Windows Installer
