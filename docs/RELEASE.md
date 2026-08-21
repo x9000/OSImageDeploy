@@ -52,12 +52,12 @@ dotnet run --project OSImageDeploy.Service.Tests\OSImageDeploy.Service.Tests.csp
 	-ExpectedSignatureStatus NotSigned
 ```
 
-These checks are automated by `.github/workflows/ci.yml`. A clean GitHub runner
-does not have the externally maintained OEM archives, so the workflow creates
-small, conspicuously marked placeholders to exercise compilation and MSI
-structure. The resulting CI MSI is not deployable and is never uploaded as an
-artifact. CI does not validate the contents of the real driver payloads, start
-the Windows service, or perform a destructive USB operation.
+These checks are automated by `.github/workflows/ci.yml`. OEM driver archives
+are operator-managed data and are not required to compile or package the
+product. The workflow validates that the CI MSI does not embed the retired OEM
+payload filenames and does not upload the installer as an artifact. CI does
+not start the installed Windows service, validate an operator's external
+driver archives, or perform a destructive USB operation.
 
 ## 3. Build and validate the signed MSI
 
@@ -68,6 +68,7 @@ in the repository.
 ```powershell
 dotnet build OSImageDeploy.Installer\OSImageDeploy.Installer.wixproj `
 	--configuration Release `
+	--property:Platform=x64 `
 	--property:CodeSigningCertificateThumbprint=<thumbprint> `
 	--property:BuildTimestampUtc=$buildTimestampUtc `
 	--nodeReuse:false
@@ -114,10 +115,11 @@ PowerShell session:
 
 The script compares the installed registration to the MSI; validates service
 startup, identity, executable path, recovery configuration, project-owned
-signatures, and real OEM driver payloads; then exercises the live named pipe
-and opens the installed UI without shell elevation. Its live checks perform
-read-only USB enumeration and confirmation-guard checks. It does not start USB
-media creation or modify the WinPE cache.
+signatures, and the absence of retired embedded OEM driver payloads; then
+exercises the live named pipe and opens the installed UI without shell
+elevation. Its live checks perform read-only USB enumeration and
+confirmation-guard checks. It does not start USB media creation or modify the
+WinPE cache.
 
 ### Installer lifecycle validation
 

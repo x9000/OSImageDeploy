@@ -5,6 +5,49 @@ the automated test suite. Each result applies only to the identified artifact,
 hardware, and configuration; it is not a claim of compatibility with every
 device or peripheral.
 
+## 2026-08-21 — 1.90.1152 installed-product candidate
+
+### Candidate identity
+
+- Commit: `7e51aa738303d5a535d53eb68947b57185924828`
+- Installer: `OSImageDeploySuite.msi`
+- Installer size: 163,311,616 bytes
+- Installer SHA-256:
+  `5994B0C3F2CF06B1810852A4A59EB5796985400104850BB12410EA62DEEF89ED`
+- Authenticode signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`
+- Sectigo RFC 3161 timestamp: present and valid
+
+### Automated and artifact validation
+
+- Canonical x64 signed Release build completed with zero warnings and errors.
+- All project-owned packaged executables and DLLs had valid timestamped
+  signatures from the expected certificate.
+- MSI structure validation passed and reported product version `1.90.1152`.
+- Microsoft MsiVal2 ICE validation completed without findings.
+
+### Installed-product validation
+
+- A clean install of the candidate line and an in-place upgrade to the
+  canonical x64 artifact both completed successfully.
+- Installed Apps registration matched version `1.90.1152` and the candidate
+  MSI product code.
+- `OSImageDeploy.Service` was Running, Automatic, LocalSystem, and configured
+  with two 120-second restart actions and a one-day recovery reset.
+- Installed project-owned binaries retained valid timestamped signatures.
+- The installed product contained no retired embedded Dell or HP WinPE driver
+  archives.
+- From a normal Medium-integrity process, the live service suite passed named
+  pipe status, external driver-package catalog, read-only USB enumeration,
+  operation-status, WinPE-cache status, and destructive-operation confirmation
+  guard checks.
+- The installed desktop UI opened directly from Medium integrity, created a
+  responsive main window, and closed normally.
+
+No USB media creation, WinPE cache modification, VMware boot, or physical
+hardware deployment was performed for this candidate. Those remain separate
+validation classes requiring an exact target and explicit authorization.
+
 ## 2026-08-14 — 1.83.1056 RC1 and production release
 
 ### Release identity
