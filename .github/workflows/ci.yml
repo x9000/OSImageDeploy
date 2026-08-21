@@ -66,6 +66,10 @@ jobs:
         shell: pwsh
         run: ./Build/Test-WinPeDriverPackageTools.ps1
 
+      - name: Validate package tooling in Windows PowerShell 5.1
+        shell: powershell
+        run: .\Build\Test-WinPeDriverPackageTools.ps1
+
       - name: Build unsigned Release solution and MSI
         run: >-
           dotnet build OSImageDeploy.slnx

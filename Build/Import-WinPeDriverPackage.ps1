@@ -127,7 +127,11 @@ if ($resolvedDestination.Equals(
 		$null)
 
 	$security.SetAccessRuleProtection($true, $false)
-	$security.SetOwner($system)
+	# An elevated administrator cannot assign SYSTEM as owner without a token
+	# privilege that is not normally enabled. Administrators own the store while
+	# both Administrators and SYSTEM retain full control; the LocalSystem service
+	# reasserts its service-side ACL when it opens the default store.
+	$security.SetOwner($administrators)
 	$security.AddAccessRule(
 		[System.Security.AccessControl.FileSystemAccessRule]::new(
 			$system,
@@ -213,9 +217,11 @@ try
 		PreparedUtc = [DateTimeOffset]::UtcNow.ToString('o')
 	}
 
-	$manifest |
-		ConvertTo-Json |
-		Set-Content -LiteralPath $stagedManifest -Encoding utf8NoBOM
+	$manifestJson = $manifest | ConvertTo-Json
+	[System.IO.File]::WriteAllText(
+		$stagedManifest,
+		$manifestJson,
+		[System.Text.UTF8Encoding]::new($false))
 
 	if (Test-Path -LiteralPath $packageDirectory)
 	{
