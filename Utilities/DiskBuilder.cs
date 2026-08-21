@@ -16,11 +16,22 @@ namespace Utilities
 		private readonly Object _progressLock = new Object();
 		private readonly Func<CancellationToken, Task<WinPeBuildResult>>
 			_buildWinPeMediaAsync;
+		private readonly IReadOnlyList<String> _driverArchivePaths;
 
 		private Int32 _lastOverallProgress;
 
 		public DiskBuilder()
+			: this(Array.Empty<String>())
 		{
+		}
+
+		public DiskBuilder(IEnumerable<String> driverArchivePaths)
+		{
+			ArgumentNullException.ThrowIfNull(driverArchivePaths);
+			_driverArchivePaths = driverArchivePaths
+				.Select(Path.GetFullPath)
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
 			_buildWinPeMediaAsync = BuildWinPeMediaAsync;
 		}
 
@@ -28,6 +39,7 @@ namespace Utilities
 			Func<CancellationToken, Task<WinPeBuildResult>>
 				buildWinPeMediaAsync)
 		{
+			_driverArchivePaths = Array.Empty<String>();
 			_buildWinPeMediaAsync = buildWinPeMediaAsync ??
 				throw new ArgumentNullException(nameof(buildWinPeMediaAsync));
 		}
@@ -507,17 +519,7 @@ namespace Utilities
 
 			cancellationToken.ThrowIfCancellationRequested();
 
-			ZipFile.ExtractToDirectory(
-				Path.Combine(
-					AppContext.BaseDirectory,
-					"DellPEDrivers.zip"),
-				driverFolder);
-
-			ZipFile.ExtractToDirectory(
-				Path.Combine(
-					AppContext.BaseDirectory,
-					"HPPEDrivers.zip"),
-				driverFolder);
+			ExtractDriverArchives(_driverArchivePaths, driverFolder);
 
 			String[] packages = GetWinPePackages();
 
@@ -570,12 +572,18 @@ namespace Utilities
 			"Exit"
 				});
 
-			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild, "Adding WinPE drivers.", 65);
-
-			wimSession.AddDriver(
-				driverFolder,
-				true,
-				false);
+			if (_driverArchivePaths.Count > 0)
+			{
+				OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild, "Adding selected WinPE drivers.", 65);
+				wimSession.AddDriver(
+					driverFolder,
+					true,
+					false);
+			}
+			else
+			{
+				OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild, "No optional WinPE drivers selected.", 65);
+			}
 
 			cancellationToken.ThrowIfCancellationRequested();
 
@@ -610,14 +618,30 @@ namespace Utilities
 				WasLoadedFromCache = false
 			};
 		}
-		private static async Task<String> CalculateDriverPackageHashAsync()
+		private async Task<String> CalculateDriverPackageHashAsync()
 		{
-			String[] files =
+			return await CalculateFilesHashAsync(_driverArchivePaths);
+		}
+
+		internal static void ExtractDriverArchives(
+			IReadOnlyList<String> driverArchivePaths,
+			String destinationDirectory)
+		{
+			ArgumentNullException.ThrowIfNull(driverArchivePaths);
+			ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+
+			for (Int32 archiveIndex = 0;
+				archiveIndex < driverArchivePaths.Count;
+				archiveIndex++)
 			{
-				Path.Combine(AppContext.BaseDirectory, "DellPEDrivers.zip"),
-				Path.Combine(AppContext.BaseDirectory, "HPPEDrivers.zip")
-			};
-			return await CalculateFilesHashAsync(files);
+				String archiveFolder = Path.Combine(
+					destinationDirectory,
+					$"package-{archiveIndex + 1}");
+				Directory.CreateDirectory(archiveFolder);
+				ZipFile.ExtractToDirectory(
+					driverArchivePaths[archiveIndex],
+					archiveFolder);
+			}
 		}
 
 		private static async Task<String> CalculatePackageConfigurationHashAsync()

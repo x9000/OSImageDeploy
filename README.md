@@ -12,7 +12,6 @@ Preparation of operator-supplied OEM and custom WinPE driver packages is
 documented in [docs/WINPE-DRIVERS.md](docs/WINPE-DRIVERS.md).
 The desktop lists those packages through the Windows service and carries only
 explicitly selected package IDs across the privileged boundary.
-The current 1.83.1056 build still requires the externally maintained Dell and
-HP archives described in the release procedure. CI uses non-deployable
-placeholders and never publishes its MSI. A subsequent release will replace
-that packaging with the external driver-package workflow.
+Current development builds no longer embed Dell or HP driver archives. Selected
+operator-prepared packages are revalidated by the service and injected into the
+WinPE image; builds with no selection include no optional OEM drivers.

@@ -10,17 +10,21 @@ namespace OSImageDeploy.Platform.Windows
 	{
 		private readonly WindowsUsbTargetProvider _targetProvider;
 		private readonly WinPeMediaCacheManager _cacheManager;
+		private readonly WindowsWinPeDriverPackageStore _driverPackageStore;
 		private readonly SemaphoreSlim _operationGate =
 			new SemaphoreSlim(1, 1);
 
 		public WindowsUsbMediaWorkflow(
 			WindowsUsbTargetProvider targetProvider,
-			WinPeMediaCacheManager cacheManager)
+			WinPeMediaCacheManager cacheManager,
+			WindowsWinPeDriverPackageStore driverPackageStore)
 		{
 			_targetProvider = targetProvider ??
 				throw new ArgumentNullException(nameof(targetProvider));
 			_cacheManager = cacheManager ??
 				throw new ArgumentNullException(nameof(cacheManager));
+			_driverPackageStore = driverPackageStore ??
+				throw new ArgumentNullException(nameof(driverPackageStore));
 		}
 
 		public Task<IReadOnlyList<UsbTargetDescriptor>> GetEligibleTargetsAsync(
@@ -56,13 +60,18 @@ namespace OSImageDeploy.Platform.Windows
 
 			try
 			{
+				IReadOnlyList<ResolvedWinPeDriverPackage> driverPackages =
+					_driverPackageStore.ResolveSelection(
+						request.WinPeDriverPackageIds);
+
 				if (request.RebuildWinPeCache)
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 					_cacheManager.Delete();
 				}
 
-				DiskBuilder diskBuilder = new DiskBuilder();
+				DiskBuilder diskBuilder = new DiskBuilder(
+					driverPackages.Select(package => package.ArchivePath));
 
 				EventHandler<DiskBuilder.DiskBuilderProgressEventArgs> handler =
 					(_, update) => progress.Report(

@@ -11,9 +11,10 @@ available packages as optional selections and unavailable built-in entries as
 download and preparation guidance.
 
 Selected package IDs are re-read and revalidated by the service immediately
-before it starts a USB operation. The current integration milestone carries
-that guarded selection through the service boundary; injection into the WinPE
-image and removal of the legacy embedded OEM archives are the next milestone.
+before it starts a USB operation. Only those archives are extracted and
+injected into the WinPE image. The WinPE cache identity includes their contents,
+so changing the selection or updating a package cannot reuse an incompatible
+cache. Builds with no selected package contain no optional OEM drivers.
 
 ## Package store
 

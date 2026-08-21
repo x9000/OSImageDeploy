@@ -20,17 +20,9 @@ Do not build a release from a working tree containing uncommitted changes.
 
 ## 2. Run the unsigned CI-equivalent checks
 
-Validate the externally maintained OEM WinPE driver archives:
-
-```powershell
-.\Build\Test-DriverPayloads.ps1
-```
-
-These archives are intentionally excluded from Git because they are large,
-third-party binary inputs. A signed or distributable build must use the real
-archives. The validator rejects missing or corrupt archives, CI placeholders,
-and archives without driver INF files. Preserve its SHA-256 output with the
-release evidence.
+OEM WinPE driver packages are operator-managed data and are not release inputs
+or MSI payloads. Validate the package preparation tooling as part of the build;
+installed packages are independently validated by the service when selected.
 
 Use one timestamp throughout the build so every project and the MSI receive the
 same version:
@@ -150,8 +142,9 @@ has changed.
 
 The service-created `%ProgramData%\OSImageDeploy` data is deliberately outside
 the MSI component inventory and is retained across uninstall/reinstall. This
-preserves the last operation result and diagnostic state; it does not preserve
-a disk selection, build request, or destructive-operation confirmation.
+preserves the last operation result, diagnostic state, WinPE cache, and
+administrator-prepared driver packages. It does not preserve a disk selection,
+build request, selected package list, or destructive-operation confirmation.
 
 After the elevated lifecycle harness passes, rerun
 `Test-InstalledProduct.ps1` from Medium integrity with
@@ -165,8 +158,6 @@ Record the exact commit, MSI version, signer, timestamp, and SHA-256 hash:
 $msi = 'OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'
 git rev-parse HEAD
 Get-FileHash -LiteralPath $msi -Algorithm SHA256
-Get-FileHash -LiteralPath OSImageDeploy\DellPEDrivers.zip -Algorithm SHA256
-Get-FileHash -LiteralPath OSImageDeploy\HPPEDrivers.zip -Algorithm SHA256
 Get-AuthenticodeSignature -LiteralPath $msi |
 	Select-Object Status, SignerCertificate, TimeStamperCertificate
 ```
