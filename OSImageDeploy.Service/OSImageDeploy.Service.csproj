@@ -21,17 +21,6 @@
 		<ProjectReference Include="..\OSImageDeploy.Transport.Grpc\OSImageDeploy.Transport.Grpc.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<None Include="..\OSImageDeploy\DellPEDrivers.zip"
-			Link="DellPEDrivers.zip"
-			CopyToOutputDirectory="PreserveNewest"
-			CopyToPublishDirectory="PreserveNewest" />
-		<None Include="..\OSImageDeploy\HPPEDrivers.zip"
-			Link="HPPEDrivers.zip"
-			CopyToOutputDirectory="PreserveNewest"
-			CopyToPublishDirectory="PreserveNewest" />
-	</ItemGroup>
-
 	<PropertyGroup>
 		<SigningScriptPath>$(MSBuildThisFileDirectory)..\Build\Sign-File.ps1</SigningScriptPath>
 	</PropertyGroup>

@@ -220,31 +220,14 @@ foreach ($installedFile in $installedFiles)
 foreach ($payloadName in 'DellPEDrivers.zip', 'HPPEDrivers.zip')
 {
 	$payloadPath = Join-Path $resolvedInstallDirectory $payloadName
-	Assert-Condition (Test-Path -LiteralPath $payloadPath -PathType Leaf) `
-		"Installed OEM driver payload was not found: $payloadPath"
-
-	$archive = [IO.Compression.ZipFile]::OpenRead($payloadPath)
-
-	try
-	{
-		$entryNames = @($archive.Entries | ForEach-Object FullName)
-		Assert-Condition `
-			($entryNames -notcontains 'CI-PLACEHOLDER.txt') `
-			"Installed product contains a CI-only driver placeholder: $payloadPath"
-		$driverCount = @(
-			$entryNames |
-			Where-Object { $_.EndsWith('.inf', [StringComparison]::OrdinalIgnoreCase) }
-		).Count
-		Assert-Condition ($driverCount -gt 0) `
-			"Installed OEM driver payload contains no INF files: $payloadPath"
-	}
-	finally
-	{
-		$archive.Dispose()
-	}
-
-	Write-Host "PASS: Installed $payloadName contains $driverCount driver INF files."
+	Assert-Condition (-not (Test-Path -LiteralPath $payloadPath)) `
+		"Installed product still contains a legacy OEM driver payload: $payloadPath"
+	$servicePayloadPath = Join-Path $resolvedInstallDirectory "Service\$payloadName"
+	Assert-Condition (-not (Test-Path -LiteralPath $servicePayloadPath)) `
+		"Installed service still contains a legacy OEM driver payload: $servicePayloadPath"
 }
+
+Write-Host 'PASS: Installed product contains no embedded legacy OEM driver payloads.'
 
 if ($RunLiveServiceChecks)
 {

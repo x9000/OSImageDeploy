@@ -219,7 +219,9 @@ try
 	WindowsUsbMediaWorkflow workflow =
 		new WindowsUsbMediaWorkflow(
 			new WindowsUsbTargetProvider(),
-			cacheManager);
+			cacheManager,
+			new WindowsWinPeDriverPackageStore(
+				Path.Combine(cacheTestDirectory, "driver-packages")));
 
 	WinPeCacheStatusSnapshot missingStatus =
 		await workflow.GetStatusAsync();
@@ -236,6 +238,32 @@ try
 		incompleteStatus.State ==
 			OSImageDeploy.Contracts.WinPeCacheState.Incomplete,
 		"A partial cache was not reported as incomplete.");
+
+	Boolean invalidPackageRejectedBeforeCacheClear = false;
+
+	try
+	{
+		await workflow.CreateUsbMediaAsync(
+			new UsbMediaBuildRequest
+			{
+				Target = original,
+				RebuildWinPeCache = true,
+				WinPeDriverPackageIds = new[] { "missing-winpe" },
+				DestructiveActionConfirmed = true
+			},
+			new Progress<OSImageDeploy.Contracts.OperationProgress>());
+	}
+	catch (InvalidDataException)
+	{
+		invalidPackageRejectedBeforeCacheClear = true;
+	}
+
+	Assert(
+		invalidPackageRejectedBeforeCacheClear,
+		"An unavailable driver package selection was accepted by the workflow.");
+	Assert(
+		File.Exists(cacheManager.ArchivePath),
+		"The WinPE cache was cleared before driver-package selection validation.");
 
 	WinPeCacheStatusSnapshot clearedStatus =
 		await workflow.ClearAsync();
@@ -256,6 +284,9 @@ Console.WriteLine("PASS: Windows WinPE cache status and clear boundary.");
 String driverPackageStoreDirectory = Path.Combine(
 	Path.GetTempPath(),
 	$"OSImageDeploy-driver-package-test-{Guid.NewGuid():N}");
+String driverExtractionDirectory = Path.Combine(
+	Path.GetTempPath(),
+	$"OSImageDeploy-driver-extraction-test-{Guid.NewGuid():N}");
 
 try
 {
@@ -324,6 +355,22 @@ try
 		selectedPackages.All(package => File.Exists(package.ArchivePath)),
 		"A selected archive path does not exist.");
 
+	DiskBuilder.ExtractDriverArchives(
+		selectedPackages.Select(package => package.ArchivePath).ToList(),
+		driverExtractionDirectory);
+	Assert(
+		Directory.GetFiles(
+			driverExtractionDirectory,
+			"*.inf",
+			SearchOption.AllDirectories).Length == 2,
+		"The selected driver archives were not extracted independently.");
+	Assert(
+		Directory.GetDirectories(
+			driverExtractionDirectory,
+			"package-*",
+			SearchOption.TopDirectoryOnly).Length == 2,
+		"Selected driver packages did not receive isolated extraction directories.");
+
 	Boolean duplicateRejected = false;
 
 	try
@@ -355,6 +402,11 @@ finally
 	if (Directory.Exists(driverPackageStoreDirectory))
 	{
 		Directory.Delete(driverPackageStoreDirectory, recursive: true);
+	}
+
+	if (Directory.Exists(driverExtractionDirectory))
+	{
+		Directory.Delete(driverExtractionDirectory, recursive: true);
 	}
 }
 

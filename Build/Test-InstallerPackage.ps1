@@ -235,6 +235,20 @@ try
 		throw 'All installer cabinets must be embedded in the MSI.'
 	}
 
+	$fileRows = @(Get-MsiRows `
+		-Database $database `
+		-Query 'SELECT `FileName` FROM `File`' `
+		-FieldCount 1)
+	$legacyPayloads = @('DellPEDrivers.zip', 'HPPEDrivers.zip')
+
+	foreach ($legacyPayload in $legacyPayloads)
+	{
+		if (($fileRows | Where-Object { $_[0] -like "*$legacyPayload*" }).Count -gt 0)
+		{
+			throw "The MSI still embeds legacy OEM driver payload '$legacyPayload'."
+		}
+	}
+
 	$summary = $database.SummaryInformation(0)
 
 	try
