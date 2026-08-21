@@ -44,6 +44,26 @@ device or peripheral.
 - The installed desktop UI opened directly from Medium integrity, created a
   responsive main window, and closed normally.
 
+### Installer lifecycle validation
+
+The lifecycle harness used the signed `v1.83.1056` production MSI as the older
+input. Its 608,940,032-byte size, published SHA-256, expected signer, and
+timestamp were independently verified before use. The current and older MSIs
+reported the same UpgradeCode.
+
+- current-version installation: exit code `0`;
+- forced repair: exit code `0`;
+- older-version downgrade attempt: correctly rejected with exit code `1603`
+  and the expected newer-product condition;
+- current-version uninstall and removal checks: exit code `0`;
+- current-version clean reinstall: exit code `0`;
+- final result: Passed.
+
+After the lifecycle run, the complete installed-product validation was repeated
+from Medium integrity. Registration, service configuration, installed
+signatures, live named-pipe checks, confirmation guards, read-only USB
+enumeration, and responsive non-elevated UI startup all passed again.
+
 No USB media creation, WinPE cache modification, VMware boot, or physical
 hardware deployment was performed for this candidate. Those remain separate
 validation classes requiring an exact target and explicit authorization.
