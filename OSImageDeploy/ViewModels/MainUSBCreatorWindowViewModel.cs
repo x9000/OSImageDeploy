@@ -4,6 +4,7 @@ using OSImageDeploy.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -62,7 +63,9 @@ namespace ViewModels
 		private String _winPeDriverPackagesStatusText =
 			"Optional WinPE drivers: Checking...";
 		private String _activeOperationId = "";
-		private String _titleTextBlockText = $"OS Image Deployment Tool v{Assembly.GetEntryAssembly().GetName().Version.Major}.{Assembly.GetEntryAssembly().GetName().Version.Minor}.{Assembly.GetEntryAssembly().GetName().Version.Build}";
+		private String _titleTextBlockText = GetApplicationTitle();
+		private Int32 _operationProgressValue;
+		private Visibility _operationProgressVisibility = Visibility.Collapsed;
 		private int _usbComboxSelectedItemIndex;
 		private bool _createUSBButtonEnabled = false;
 		private bool _cancelUSBButtonEnabled = false;
@@ -134,6 +137,26 @@ namespace ViewModels
 			{
 				_subInfoTextBlockText = value;
 				NotifyPropertyChanged(nameof(SubInfoTextBlockText));
+			}
+		}
+
+		public Int32 OperationProgressValue
+		{
+			get => _operationProgressValue;
+			set
+			{
+				_operationProgressValue = Math.Clamp(value, 0, 100);
+				NotifyPropertyChanged(nameof(OperationProgressValue));
+			}
+		}
+
+		public Visibility OperationProgressVisibility
+		{
+			get => _operationProgressVisibility;
+			set
+			{
+				_operationProgressVisibility = value;
+				NotifyPropertyChanged(nameof(OperationProgressVisibility));
 			}
 		}
 
@@ -742,6 +765,7 @@ namespace ViewModels
 			UsbMediaOperationSnapshot operation)
 		{
 			_activeOperationId = operation.OperationId;
+			OperationProgressVisibility = Visibility.Visible;
 			ExitButtonEnabled = false;
 			CreateUSBButtonEnabled = false;
 			RefreshUSBButtonEnabled = false;
@@ -840,6 +864,7 @@ namespace ViewModels
 		private async Task RestoreControlsAfterUsbOperationAsync()
 		{
 			_activeOperationId = "";
+			OperationProgressVisibility = Visibility.Collapsed;
 			CancelUSBButtonEnabled = false;
 			ExitButtonEnabled = true;
 			RefreshUSBButtonEnabled = true;
@@ -901,6 +926,33 @@ namespace ViewModels
 						$"{progress.OverallPercent}%"
 					: progress.Message;
 			}
+
+			if (progress.OverallPercent.HasValue)
+			{
+				OperationProgressValue = progress.OverallPercent.Value;
+			}
+		}
+
+		private static String GetApplicationTitle()
+		{
+			Assembly entryAssembly = Assembly.GetEntryAssembly();
+			String fileVersion = entryAssembly?
+				.GetCustomAttribute<AssemblyFileVersionAttribute>()?
+				.Version;
+
+			if (Version.TryParse(fileVersion, out Version version))
+			{
+				return $"OS Image Deployment Tool v" +
+					$"{version.Major}.{version.Minor}.{version.Build}";
+			}
+
+			FileVersionInfo versionInfo = entryAssembly == null
+				? null
+				: FileVersionInfo.GetVersionInfo(entryAssembly.Location);
+
+			return String.IsNullOrWhiteSpace(versionInfo?.FileVersion)
+				? "OS Image Deployment Tool"
+				: $"OS Image Deployment Tool v{versionInfo.FileVersion}";
 		}
 
 		private bool RefreshUSBButtonCanExecuteHandler()

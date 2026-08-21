@@ -26,12 +26,6 @@ namespace OSImageDeploy.Views
 		}
 		#endregion
 
-		protected override void OnMouseDown(MouseButtonEventArgs e)
-		{
-			base.OnMouseDown(e);
-			this.DragMove();
-		}
-
 		private void OpenExternalLink(
 			object sender,
 			RequestNavigateEventArgs e)
