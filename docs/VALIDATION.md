@@ -5,6 +5,70 @@ the automated test suite. Each result applies only to the identified artifact,
 hardware, and configuration; it is not a claim of compatibility with every
 device or peripheral.
 
+## 2026-08-21 — 1.90.1456 installed-product USB validation
+
+### Candidate identity
+
+- Commit: `10b52541cd41c1b296fd631d7e95eead59483c56`
+- Installer: `OSImageDeploySuite.msi`
+- Installer size: 163,328,000 bytes
+- Installer SHA-256:
+  `023719DCD6845713EF037440659CF9A3E15442BB87C54C52938287DFAE27105B`
+- Authenticode signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`
+- Sectigo RFC 3161 timestamp: present and valid
+
+### Automated, artifact, and installed-product validation
+
+- The canonical signed x64 Release build completed with zero warnings and
+  errors.
+- Every project-owned packaged executable and DLL had a valid timestamped
+  signature from the expected certificate.
+- MSI structure validation and Microsoft MsiVal2 ICE validation passed without
+  findings.
+- An in-place upgrade from `1.90.1152` to `1.90.1456` completed successfully.
+- Installed Apps registration, service startup mode and LocalSystem identity,
+  service recovery policy, installed signatures, named-pipe communication,
+  external package catalog, operation persistence round trip, WinPE cache
+  boundaries, target enumeration, and destructive-operation guards all passed.
+- The installed UI launched directly from Medium integrity and remained
+  responsive throughout the USB build.
+
+### Dell-enabled USB-media validation
+
+Immediately before the destructive operation, the target was independently
+rediscovered and then shown again by the installed application's confirmation
+dialog:
+
+- target: Disk 3, `WDC WDS 100T1R0B-68A`, 1,000,204,886,016 bytes, USB bus;
+- stable target identity:
+  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\01293800008D&0:KEPLER`;
+- pre-operation state: GPT, Online, Healthy, writable, three partitions, and
+  reported by Windows as neither the system disk nor the boot disk;
+- selected package: `Dell WinPE driver pack`, containing 70 INF files.
+
+The installed UI displayed the generated title `OS Image Deployment Tool
+v1.90.1456` and the redesigned resizable two-column layout. During the build it
+showed continuous, phase-aware progress, including selected-driver counts such
+as `Adding selected WinPE drivers: 18 / 70`, an elapsed-time heartbeat while
+DISM had no native percentage such as `Committing and dismounting Boot.wim
+(00:10 elapsed)`, and native DISM progress when it became available.
+
+The cache creation timestamp changed during the run, confirming that the
+Dell-selected cache was rebuilt. The operation reached
+`Complete - USB media creation completed. 100%`.
+
+Post-build inspection found the same healthy Disk 3 identity with the expected
+three-partition GPT layout, a healthy FAT32 `WINPE` volume and a healthy NTFS
+`BuildData` volume. The complete installed-product and live-service checks
+passed again afterward from Medium integrity.
+
+This exact `1.90.1456` artifact has completed automated, signed-artifact,
+installed-product, and destructive USB-media validation. VMware boot and
+physical-hardware boot testing have not yet been performed for this exact
+artifact; the successful boot results in the next candidate section apply to
+`1.90.1152`.
+
 ## 2026-08-21 — 1.90.1152 installed-product candidate
 
 ### Candidate identity

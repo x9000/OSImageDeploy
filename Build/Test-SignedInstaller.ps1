@@ -4,8 +4,7 @@ param
 	[Parameter(Mandatory)]
 	[string] $CertificateThumbprint,
 
-	[string] $InstallerPath =
-		(Join-Path $PSScriptRoot '..\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'),
+	[string] $InstallerPath,
 
 	[string] $PublishRoot =
 		(Join-Path $env:TEMP 'OSImageDeploy.Installer\Release\publish'),
@@ -18,9 +17,19 @@ param
 )
 
 $ErrorActionPreference = 'Stop'
+$scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+if ([string]::IsNullOrWhiteSpace($InstallerPath))
+{
+	$InstallerPath = Join-Path `
+		$scriptDirectory `
+		'..\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'
+}
+
 $normalizedThumbprint = $CertificateThumbprint.Replace(' ', '').Trim()
 $resolvedInstallerPath =
-	[System.IO.Path]::GetFullPath($InstallerPath)
+	$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath(
+		$InstallerPath)
 
 $filesToVerify = @(
 	$resolvedInstallerPath

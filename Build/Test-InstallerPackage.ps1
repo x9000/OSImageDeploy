@@ -1,18 +1,27 @@
 [CmdletBinding()]
 param
 (
-	[string] $InstallerPath =
-		(Join-Path $PSScriptRoot '..\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'),
+	[string] $InstallerPath,
 
 	[ValidateSet('Any', 'NotSigned', 'Valid')]
 	[string] $ExpectedSignatureStatus = 'Any'
 )
 
 $ErrorActionPreference = 'Stop'
+$scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+if ([string]::IsNullOrWhiteSpace($InstallerPath))
+{
+	$InstallerPath = Join-Path `
+		$scriptDirectory `
+		'..\OSImageDeploy.Installer\bin\x64\Release\OSImageDeploySuite.msi'
+}
+
 $expectedUpgradeCode =
 	'{64552430-8321-4966-B779-B464DF8D6E86}'
 $resolvedInstallerPath =
-	[System.IO.Path]::GetFullPath($InstallerPath)
+	$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath(
+		$InstallerPath)
 
 function Assert-Equal
 {

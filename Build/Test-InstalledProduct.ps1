@@ -100,13 +100,17 @@ function Test-ProjectSignature
 }
 
 $normalizedThumbprint = $CertificateThumbprint.Replace(' ', '').Trim().ToUpperInvariant()
-$resolvedInstallDirectory = [IO.Path]::GetFullPath($InstallDirectory)
+$resolvedInstallDirectory =
+	$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath(
+		$InstallDirectory)
 $expectedProductCode = $null
 $expectedProductVersion = $null
 
 if (-not [string]::IsNullOrWhiteSpace($InstallerPath))
 {
-	$resolvedInstallerPath = [IO.Path]::GetFullPath($InstallerPath)
+	$resolvedInstallerPath =
+		$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath(
+			$InstallerPath)
 	Assert-Condition (Test-Path -LiteralPath $resolvedInstallerPath -PathType Leaf) `
 		"Installer was not found: $resolvedInstallerPath"
 
