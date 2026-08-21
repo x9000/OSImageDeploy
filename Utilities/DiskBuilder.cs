@@ -14,11 +14,16 @@ namespace Utilities
 	public sealed class DiskBuilder
 	{
 		private readonly Object _progressLock = new Object();
+		private readonly Object _dismProgressLock = new Object();
 		private readonly Func<CancellationToken, Task<WinPeBuildResult>>
 			_buildWinPeMediaAsync;
 		private readonly IReadOnlyList<String> _driverArchivePaths;
 
 		private Int32 _lastOverallProgress;
+		private Double _dismProgressStart;
+		private Double _dismProgressEnd;
+		private Double _lastDismPhaseProgress;
+		private String _dismOperationName = "DISM operation";
 
 		public DiskBuilder()
 			: this(Array.Empty<String>())
@@ -505,6 +510,10 @@ namespace Utilities
 				bootWimPath);
 
 			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	"Mounting Boot.wim.", 10);
+			SetDismProgressContext(
+				"Mounting Boot.wim",
+				10,
+				15);
 
 			using WimImageService service = new WimImageService();
 
@@ -519,7 +528,22 @@ namespace Utilities
 
 			cancellationToken.ThrowIfCancellationRequested();
 
-			ExtractDriverArchives(_driverArchivePaths, driverFolder);
+			ExtractDriverArchives(
+				_driverArchivePaths,
+				driverFolder,
+				(completedFiles, totalFiles, archiveName) =>
+				{
+					Double extractionProgress = totalFiles == 0
+						? 20
+						: 15 + completedFiles / (Double)totalFiles * 5;
+
+					OnPhaseProgress(
+						DiskBuildPhase.FreshWinPeBuild,
+						$"Extracting optional WinPE drivers: " +
+						$"{completedFiles} of {totalFiles} files from {archiveName}.",
+						extractionProgress);
+				},
+				cancellationToken);
 
 			String[] packages = GetWinPePackages();
 
@@ -531,9 +555,19 @@ namespace Utilities
 
 				String package = packages[packageIndex];
 
-				Double packageProgress = 15 + ((packageIndex + 1D) / packages.Length * 35D);
+				Double packageProgressStart =
+					20 + packageIndex / (Double)packages.Length * 35;
+				Double packageProgressEnd =
+					20 + (packageIndex + 1D) / packages.Length * 35;
 
-				OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	$"Adding package {packageIndex + 1} of {packages.Length}: {package}", packageProgress);
+				OnPhaseProgress(
+					DiskBuildPhase.FreshWinPeBuild,
+					$"Adding package {packageIndex + 1} of {packages.Length}: {package}",
+					packageProgressStart);
+				SetDismProgressContext(
+					$"Adding package {packageIndex + 1} of {packages.Length}",
+					packageProgressStart,
+					packageProgressEnd);
 
 				String packagePath = Path.Combine(environment.OptionalComponentsFolder,	package);
 
@@ -575,6 +609,10 @@ namespace Utilities
 			if (_driverArchivePaths.Count > 0)
 			{
 				OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild, "Adding selected WinPE drivers.", 65);
+				SetDismProgressContext(
+					"Adding selected WinPE drivers",
+					65,
+					75);
 				wimSession.AddDriver(
 					driverFolder,
 					true,
@@ -588,9 +626,13 @@ namespace Utilities
 			cancellationToken.ThrowIfCancellationRequested();
 
 			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	"Committing and dismounting Boot.wim.",	75);
+			SetDismProgressContext(
+				"Committing and dismounting Boot.wim",
+				75,
+				90);
 
-			await wimSession.UnmountAsync(
-				commit: true,
+			await UnmountWimWithActivityAsync(
+				wimSession,
 				cancellationToken);
 
 			OnPhaseProgress(DiskBuildPhase.FreshWinPeBuild,	"Creating WinPE media cache.", 90);
@@ -625,22 +667,75 @@ namespace Utilities
 
 		internal static void ExtractDriverArchives(
 			IReadOnlyList<String> driverArchivePaths,
-			String destinationDirectory)
+			String destinationDirectory,
+			Action<Int32, Int32, String> progress = null,
+			CancellationToken cancellationToken = default)
 		{
 			ArgumentNullException.ThrowIfNull(driverArchivePaths);
 			ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+
+			Int32 totalFiles = driverArchivePaths.Sum(
+				archivePath =>
+				{
+					using ZipArchive archive = ZipFile.OpenRead(archivePath);
+					return archive.Entries.Count(entry =>
+						!String.IsNullOrEmpty(entry.Name));
+				});
+			Int32 completedFiles = 0;
 
 			for (Int32 archiveIndex = 0;
 				archiveIndex < driverArchivePaths.Count;
 				archiveIndex++)
 			{
+				cancellationToken.ThrowIfCancellationRequested();
+
 				String archiveFolder = Path.Combine(
 					destinationDirectory,
 					$"package-{archiveIndex + 1}");
 				Directory.CreateDirectory(archiveFolder);
-				ZipFile.ExtractToDirectory(
-					driverArchivePaths[archiveIndex],
-					archiveFolder);
+
+				String archiveRoot =
+					Path.GetFullPath(archiveFolder) +
+					Path.DirectorySeparatorChar;
+				String archiveName =
+					Path.GetFileName(driverArchivePaths[archiveIndex]);
+
+				using ZipArchive archive =
+					ZipFile.OpenRead(driverArchivePaths[archiveIndex]);
+
+				foreach (ZipArchiveEntry entry in archive.Entries)
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+
+					String destinationPath = Path.GetFullPath(
+						Path.Combine(archiveFolder, entry.FullName));
+
+					if (!destinationPath.StartsWith(
+						archiveRoot,
+						StringComparison.OrdinalIgnoreCase))
+					{
+						throw new InvalidDataException(
+							$"Driver archive '{archiveName}' contains an unsafe path.");
+					}
+
+					if (String.IsNullOrEmpty(entry.Name))
+					{
+						Directory.CreateDirectory(destinationPath);
+						continue;
+					}
+
+					String parentDirectory = Path.GetDirectoryName(destinationPath) ??
+						throw new InvalidDataException(
+							$"Driver archive '{archiveName}' contains an invalid path.");
+					Directory.CreateDirectory(parentDirectory);
+					entry.ExtractToFile(destinationPath);
+
+					completedFiles++;
+					progress?.Invoke(
+						completedFiles,
+						totalFiles,
+						archiveName);
+				}
 			}
 		}
 
@@ -882,6 +977,63 @@ namespace Utilities
 
 			return Convert.ToHexString(hash);
 		}
+
+		private void SetDismProgressContext(
+			String operationName,
+			Double progressStart,
+			Double progressEnd)
+		{
+			lock (_dismProgressLock)
+			{
+				_dismOperationName = operationName;
+				_dismProgressStart = progressStart;
+				_dismProgressEnd = progressEnd;
+				_lastDismPhaseProgress = progressStart;
+			}
+		}
+
+		private async Task UnmountWimWithActivityAsync(
+			WimServicingSession wimSession,
+			CancellationToken cancellationToken)
+		{
+			Task unmountTask = wimSession.UnmountAsync(
+				commit: true,
+				cancellationToken);
+			Stopwatch stopwatch = Stopwatch.StartNew();
+
+			while (!unmountTask.IsCompleted)
+			{
+				Task completedTask = await Task.WhenAny(
+					unmountTask,
+					Task.Delay(TimeSpan.FromSeconds(2)));
+
+				if (completedTask == unmountTask)
+				{
+					break;
+				}
+
+				Double phaseProgress;
+
+				lock (_dismProgressLock)
+				{
+					phaseProgress = _lastDismPhaseProgress;
+				}
+
+				OnPhaseProgress(
+					DiskBuildPhase.FreshWinPeBuild,
+					$"Committing and dismounting Boot.wim " +
+					$"({stopwatch.Elapsed:mm\\:ss} elapsed).",
+					phaseProgress);
+			}
+
+			await unmountTask;
+
+			OnPhaseProgress(
+				DiskBuildPhase.FreshWinPeBuild,
+				"Boot.wim committed and dismounted.",
+				90);
+		}
+
 		private void Service_ProgressChanged(
 			object sender,
 			WimOperationProgressEventArgs e)
@@ -892,10 +1044,25 @@ namespace Utilities
 					0,
 					100);
 
+			String operationName;
+			Double phaseProgress;
+
+			lock (_dismProgressLock)
+			{
+				operationName = _dismOperationName;
+				phaseProgress =
+					_dismProgressStart +
+					(_dismProgressEnd - _dismProgressStart) *
+					dismProgress / 100;
+				_lastDismPhaseProgress = Math.Max(
+					_lastDismPhaseProgress,
+					phaseProgress);
+			}
+
 			OnPhaseProgress(
 				DiskBuildPhase.FreshWinPeBuild,
-				$"{e.OperationName}: {e.Current} / {e.Total}",
-				10 + dismProgress * 0.65);
+				$"{operationName}: {e.Current} / {e.Total}",
+				phaseProgress);
 		}
 
 		private static CimInstance GetDisk(CimSession session, uint diskNumber)

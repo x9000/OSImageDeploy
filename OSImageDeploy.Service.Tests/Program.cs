@@ -355,9 +355,13 @@ try
 		selectedPackages.All(package => File.Exists(package.ArchivePath)),
 		"A selected archive path does not exist.");
 
+	List<(Int32 Completed, Int32 Total, String ArchiveName)>
+		extractionProgress = new();
 	DiskBuilder.ExtractDriverArchives(
 		selectedPackages.Select(package => package.ArchivePath).ToList(),
-		driverExtractionDirectory);
+		driverExtractionDirectory,
+		(completed, total, archiveName) =>
+			extractionProgress.Add((completed, total, archiveName)));
 	Assert(
 		Directory.GetFiles(
 			driverExtractionDirectory,
@@ -370,6 +374,16 @@ try
 			"package-*",
 			SearchOption.TopDirectoryOnly).Length == 2,
 		"Selected driver packages did not receive isolated extraction directories.");
+	Assert(
+		extractionProgress.Count == 2,
+		"Driver extraction did not report progress for every file.");
+	Assert(
+		extractionProgress[^1].Completed == extractionProgress[^1].Total,
+		"Driver extraction progress did not reach the total file count.");
+	Assert(
+		extractionProgress.All(update =>
+			!String.IsNullOrWhiteSpace(update.ArchiveName)),
+		"Driver extraction progress omitted the archive name.");
 
 	Boolean duplicateRejected = false;
 

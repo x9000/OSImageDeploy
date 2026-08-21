@@ -99,6 +99,11 @@ testing:
   user context;
 - the installed desktop UI opens without elevation, connects to the service,
   reports WinPE cache state, enumerates USB targets, and closes normally;
+- the desktop title displays the installed product version rather than the
+  fixed assembly compatibility version;
+- during a separately authorised full USB build with optional drivers, the UI
+  continues to receive per-file driver extraction updates and periodic
+  activity updates while `Boot.wim` is committed and dismounted;
 - service recovery configuration still reports two delayed restart actions;
 - upgrade, repair, uninstall, and downgrade rejection behave as documented.
 
