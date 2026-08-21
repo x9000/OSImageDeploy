@@ -94,8 +94,17 @@ product and live service checks passed afterward, including no active
 operation, last-operation status, named-pipe calls, read-only enumeration, and
 confirmation guards.
 
-No VMware boot or physical-hardware boot/deployment was performed for this
-Dell-enabled candidate media. Those remain separate validation classes.
+### VMware Workstation boot validation
+
+The exact Dell-enabled candidate media created above booted successfully in a
+VMware Workstation virtual machine. The observed virtual-machine boot path
+worked without a reported error. This validates that the completed media is
+bootable in that virtual environment; it does not validate Dell hardware,
+physical firmware variations, or the applicability of the injected Dell
+drivers to a particular physical model.
+
+Physical-hardware boot and deployment testing of this Dell-enabled candidate
+media remained pending after the VMware result.
 
 ## 2026-08-14 — 1.83.1056 RC1 and production release
 
