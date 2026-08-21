@@ -103,8 +103,15 @@ bootable in that virtual environment; it does not validate Dell hardware,
 physical firmware variations, or the applicability of the injected Dell
 drivers to a particular physical model.
 
-Physical-hardware boot and deployment testing of this Dell-enabled candidate
-media remained pending after the VMware result.
+### Dell Pro 14 Plus physical boot validation
+
+The same Dell-enabled candidate media also booted successfully on a physical
+Dell Pro 14 Plus laptop. This validates the physical UEFI boot path for that
+model with the Dell A10 WinPE package included.
+
+This result is physical-hardware boot validation only. It does not by itself
+record a complete Windows deployment or post-installation driver validation
+for this particular candidate media.
 
 ## 2026-08-14 — 1.83.1056 RC1 and production release
 
