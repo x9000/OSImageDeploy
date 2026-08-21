@@ -64,9 +64,38 @@ from Medium integrity. Registration, service configuration, installed
 signatures, live named-pipe checks, confirmation guards, read-only USB
 enumeration, and responsive non-elevated UI startup all passed again.
 
-No USB media creation, WinPE cache modification, VMware boot, or physical
-hardware deployment was performed for this candidate. Those remain separate
-validation classes requiring an exact target and explicit authorization.
+### External Dell WinPE driver and USB-media validation
+
+The installed product completed a destructive USB build after the target was
+rediscovered, revalidated, and explicitly confirmed. The non-elevated UI sent
+only the selected stable package ID; the service re-read the package and target
+before proceeding.
+
+- target: Disk 3, `WDC WDS 100T1R0B-68A`, 1,000,204,886,016 bytes, USB bus;
+- stable target identity:
+  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\01293800008D&0:KEPLER`;
+- pre-operation state: GPT, Online, Healthy, writable, three partitions, and
+  reported by Windows as neither the system disk nor the boot disk;
+- selected package ID: `dell-winpe`;
+- package source version: Dell WinPE 11 A10;
+- package contents: 70 INF files;
+- package archive SHA-256:
+  `6064D439DC5D4B7A60A5660533C5AAB07F095B09CFD3E1146C4CEBDC2C194512`.
+
+The service invalidated the previous cache identity, built a new WinPE cache,
+reported all 70 Dell drivers being added, committed `Boot.wim`, and then
+prepared the confirmed disk. The resulting cache manifest recorded non-empty
+driver-package and package-configuration hashes. The UI reached
+`Complete - USB media creation completed. 100%`.
+
+Post-build inspection found the same healthy USB identity with a GPT layout,
+a FAT32 `WINPE` volume and an NTFS `BuildData` volume. The complete installed
+product and live service checks passed afterward, including no active
+operation, last-operation status, named-pipe calls, read-only enumeration, and
+confirmation guards.
+
+No VMware boot or physical-hardware boot/deployment was performed for this
+Dell-enabled candidate media. Those remain separate validation classes.
 
 ## 2026-08-14 — 1.83.1056 RC1 and production release
 
