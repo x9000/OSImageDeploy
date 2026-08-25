@@ -17,6 +17,7 @@ service OsImageDeployControl {
 	rpc GetWinPeCacheStatus (GetWinPeCacheStatusRequest) returns (WinPeCacheStatusResponse);
 	rpc ClearWinPeCache (ClearWinPeCacheRequest) returns (WinPeCacheStatusResponse);
 	rpc ListWinPeDriverPackages (ListWinPeDriverPackagesRequest) returns (ListWinPeDriverPackagesResponse);
+	rpc PrepareWinPeDriverPackage (PrepareWinPeDriverPackageRequest) returns (WinPeDriverPackage);
 }
 
 message GetServiceStatusRequest {
@@ -89,6 +90,15 @@ message WinPeDriverPackage {
 	int64 archive_size_bytes = 9;
 	string archive_sha256 = 10;
 	string status_message = 11;
+	string preparation_file_extension = 12;
+	bool can_prepare_automatically = 13;
+}
+
+message PrepareWinPeDriverPackageRequest {
+	string package_id = 1;
+	string source_file_path = 2;
+	string source_version = 3;
+	bool replace_existing_confirmed = 4;
 }
 
 message UsbMediaOperationRequest {

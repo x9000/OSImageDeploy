@@ -14,6 +14,10 @@ namespace OSImageDeploy.Contracts
 
 		public String PreparationInstructions { get; init; } = "";
 
+		public String PreparationFileExtension { get; init; } = "";
+
+		public Boolean CanPrepareAutomatically { get; init; }
+
 		public Boolean IsAvailable { get; init; }
 
 		public Int32 DriverCount { get; init; }

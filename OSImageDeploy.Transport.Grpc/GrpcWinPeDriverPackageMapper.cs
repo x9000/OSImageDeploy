@@ -18,6 +18,10 @@ namespace OSImageDeploy.Transport.Grpc
 				SourceVersion = descriptor.SourceVersion,
 				SourcePageUrl = descriptor.SourcePageUrl,
 				PreparationInstructions = descriptor.PreparationInstructions,
+				PreparationFileExtension =
+					descriptor.PreparationFileExtension,
+				CanPrepareAutomatically =
+					descriptor.CanPrepareAutomatically,
 				IsAvailable = descriptor.IsAvailable,
 				DriverCount = descriptor.DriverCount,
 				ArchiveSizeBytes = descriptor.ArchiveSizeBytes,
@@ -39,6 +43,10 @@ namespace OSImageDeploy.Transport.Grpc
 				SourceVersion = message.SourceVersion,
 				SourcePageUrl = message.SourcePageUrl,
 				PreparationInstructions = message.PreparationInstructions,
+				PreparationFileExtension =
+					message.PreparationFileExtension,
+				CanPrepareAutomatically =
+					message.CanPrepareAutomatically,
 				IsAvailable = message.IsAvailable,
 				DriverCount = message.DriverCount,
 				ArchiveSizeBytes = message.ArchiveSizeBytes,

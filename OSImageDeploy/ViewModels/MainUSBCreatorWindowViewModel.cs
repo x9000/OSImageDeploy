@@ -372,7 +372,7 @@ namespace ViewModels
 			}
 		}
 
-		private async Task RefreshWinPeDriverPackagesAsync()
+		public async Task RefreshWinPeDriverPackagesAsync()
 		{
 			try
 			{
@@ -401,7 +401,7 @@ namespace ViewModels
 
 				Int32 availableCount = packages.Count(package => package.IsAvailable);
 				WinPeDriverPackagesStatusText = availableCount == 0
-					? "Optional WinPE drivers: None prepared. Use the official links below and ask an administrator to import a package."
+					? "Optional WinPE drivers: None prepared. Download an OEM package, then use Prepare package."
 					: $"Optional WinPE drivers: {availableCount} package(s) available. Select only those required for this USB.";
 			}
 			catch (Exception exception)

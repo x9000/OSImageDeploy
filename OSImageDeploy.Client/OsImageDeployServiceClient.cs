@@ -15,6 +15,8 @@ namespace OSImageDeploy.Client
 	{
 		private static readonly TimeSpan RequestTimeout =
 			TimeSpan.FromSeconds(15);
+		private static readonly TimeSpan PackagePreparationTimeout =
+			TimeSpan.FromMinutes(20);
 
 		private readonly GrpcChannel _channel;
 		private readonly OsImageDeployControl.OsImageDeployControlClient _client;
@@ -135,6 +137,41 @@ namespace OSImageDeploy.Client
 				return response.Packages
 					.Select(GrpcWinPeDriverPackageMapper.ToDescriptor)
 					.ToList();
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
+		public async Task<WinPeDriverPackageDescriptor>
+			PrepareWinPeDriverPackageAsync(
+				String packageId,
+				String sourceFilePath,
+				String sourceVersion,
+				Boolean replaceExistingConfirmed,
+				CancellationToken cancellationToken = default)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+			ArgumentException.ThrowIfNullOrWhiteSpace(sourceFilePath);
+
+			try
+			{
+				WinPeDriverPackage response =
+					await _client.PrepareWinPeDriverPackageAsync(
+						new PrepareWinPeDriverPackageRequest
+						{
+							PackageId = packageId,
+							SourceFilePath = sourceFilePath,
+							SourceVersion = sourceVersion ?? "",
+							ReplaceExistingConfirmed =
+								replaceExistingConfirmed
+						},
+						deadline: DateTime.UtcNow.Add(
+							PackagePreparationTimeout),
+						cancellationToken: cancellationToken);
+
+				return GrpcWinPeDriverPackageMapper.ToDescriptor(response);
 			}
 			catch (RpcException exception)
 			{

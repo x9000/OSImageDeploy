@@ -11,6 +11,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Navigation;
 using System.Diagnostics;
+using OSImageDeploy.Contracts;
+using ViewModels;
 
 namespace OSImageDeploy.Views
 {
@@ -43,6 +45,39 @@ namespace OSImageDeploy.Views
 					UseShellExecute = true
 				});
 			e.Handled = true;
+		}
+
+		private async void PreparePackageClick(
+			object sender,
+			RoutedEventArgs e)
+		{
+			if (sender is not Button button ||
+				button.Tag is not WinPeDriverPackageDescriptor package)
+			{
+				return;
+			}
+
+			WinPeDriverPackagePreparationWindow dialog = new(package)
+			{
+				Owner = this
+			};
+
+			if (dialog.ShowDialog() == true &&
+				DataContext is MainUSBCreatorWindowViewModel viewModel)
+			{
+				await viewModel.RefreshWinPeDriverPackagesAsync();
+			}
+		}
+
+		private void OpenDriverSupportClick(
+			object sender,
+			RoutedEventArgs e)
+		{
+			WinPeDriverSupportWindow dialog = new()
+			{
+				Owner = this
+			};
+			dialog.ShowDialog();
 		}
     }
 }
