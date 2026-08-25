@@ -13,6 +13,7 @@ namespace OSImageDeploy.Platform.Windows
 	{
 		private const String ArchiveFileName = "drivers.zip";
 		private const String ManifestFileName = "package.json";
+		private const Int32 HpSoftPaqMissingLaunchTargetExitCode = 1168;
 		private const Int64 MaximumSourceFileSizeBytes =
 			2L * 1024L * 1024L * 1024L;
 
@@ -400,12 +401,21 @@ namespace OSImageDeploy.Platform.Windows
 				["/s", "/e", "/f", destinationDirectory],
 				cancellationToken);
 
-			if (result.ExitCode != 0)
+			if (!IsAcceptedHpSoftPaqExitCode(result.ExitCode))
 			{
 				throw new InvalidDataException(
 					"The HP SoftPaq extractor did not complete successfully. " +
 					GetProcessError(result));
 			}
+		}
+
+		internal static Boolean IsAcceptedHpSoftPaqExitCode(Int32 exitCode)
+		{
+			// Current HP WinPE wrappers can extract the complete payload, then return
+			// ERROR_NOT_FOUND because unpack-only mode has no post-extraction target.
+			// The caller still validates the extracted tree before installing it.
+			return exitCode == 0 ||
+				exitCode == HpSoftPaqMissingLaunchTargetExitCode;
 		}
 
 		private static async Task VerifyHpSourceAsync(
