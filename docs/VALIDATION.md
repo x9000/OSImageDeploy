@@ -57,8 +57,23 @@ device or peripheral.
 - The resulting managed package was Available, reported version `3.40`, and
   contained 195 INF drivers. Its managed archive SHA-256 was
   `8C61331303BD66FE6CB6E27E6F04526A30D7BE26268ACE65833DEE52F09F8E24`.
-- No USB media creation, disk erasure, VMware boot test, or physical-hardware
-  boot test was performed for this correction.
+- No USB media creation or boot test was performed during the initial correction
+  validation. The subsequent combined-package result is recorded below.
+
+### Combined Dell and HP USB-media validation
+
+- The installed product subsequently created new USB media successfully with
+  both the prepared Dell and HP WinPE driver packages selected.
+- The completed media booted successfully in a VMware Workstation virtual
+  machine.
+- The same media also booted successfully on the physical Dell laptop used for
+  the preceding Dell validation.
+- These results validate the observed combined-package media-creation path, the
+  VMware virtual boot path, and that physical Dell boot path. They do not yet
+  validate booting the media on physical HP hardware.
+- A physical HP boot test is planned when that in-use device can be fitted with
+  a replaceable test disk. No HP rebuild or full Windows deployment result is
+  claimed at this stage.
 
 ## 2026-08-25 — 1.94.1328 WinPE driver preparation and lifecycle validation
 
