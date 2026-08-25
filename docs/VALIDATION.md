@@ -5,6 +5,83 @@ the automated test suite. Each result applies only to the identified artifact,
 hardware, and configuration; it is not a claim of compatibility with every
 device or peripheral.
 
+## 2026-08-25 — 1.94.1328 WinPE driver preparation and lifecycle validation
+
+### Candidate identity
+
+- Feature commit: `ad75017b202907bcc0cb728503a17a4512ccbe59`
+- Merge commit: `898b319b92e2f148b16cc2f43a1911e200348900`
+- Installer: `OSImageDeploySuite.msi`
+- Installer size: 163,336,192 bytes
+- Installer SHA-256:
+  `656B65E687EFD3198F4D1160B35A336CD6662C599DA8EFDACC2BB3125DDC85C0`
+- Authenticode signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`
+- Sectigo RFC 3161 timestamp: present and valid
+
+### Automated, artifact, and installed-product validation
+
+- The canonical signed x64 Release build completed with zero warnings and
+  errors.
+- The Engine suite passed all 19 safety and persisted-operation checks. The
+  service suite passed the gRPC, package-preparation, WinPE-cache, target-safety,
+  and destructive-confirmation checks.
+- Driver-package tooling passed in both PowerShell 7 and Windows PowerShell
+  5.1.
+- Every project-owned packaged executable and DLL had a valid timestamped
+  signature from the expected certificate.
+- MSI structure validation and Microsoft MsiVal2 ICE validation passed without
+  findings.
+- Pull-request CI passed before merge, and the independent post-merge `main`
+  CI run passed afterward.
+- The installed UI displayed `OS Image Deployment Tool v1.94.1328`, remained
+  non-elevated, connected to the LocalSystem service, and displayed the new
+  official-download, package-preparation, and driver-support controls without
+  clipping at the tested window size.
+
+### Real manufacturer-package checks
+
+- A real Dell WinPE 11 A10 multi-file CAB was expanded and validated during
+  installed-candidate testing, producing 70 INF files. The corrected CAB
+  extraction explicitly selects all files rather than relying on the misleading
+  zero exit code returned by `expand.exe` when a multi-file CAB is given without
+  a file specification.
+- That Dell preparation completed on the immediately preceding installed
+  candidate. Version 1.94.1328 retained and revalidated the service-owned
+  package after upgrade and after lifecycle reinstall. The final code change
+  between those candidates only corrected the preparation dialog close order.
+- The real signed HP executable `sp172427.exe` was tested against the installed
+  1.94.1328 named-pipe service. Its signed HP product metadata identified a full
+  Windows model driver pack rather than a WinPE driver pack, so the service
+  rejected it before extraction or execution. The HP package remained
+  unavailable afterward.
+
+### Installer lifecycle validation
+
+The lifecycle harness used the signed `v1.83.1056` production MSI as the older
+input. Its published SHA-256, timestamp, signer, and shared UpgradeCode were
+verified before changing installed state.
+
+- current-version installation: exit code `0`;
+- forced repair: exit code `0`;
+- older-version downgrade attempt: correctly rejected with exit code `1603`
+  and the expected newer-product evidence;
+- current-version uninstall and removal checks: exit code `0`;
+- current-version clean reinstall: exit code `0`;
+- final result: Passed.
+
+After reinstall, installed Apps registration, service startup and LocalSystem
+identity, recovery configuration, installed signatures, named-pipe calls,
+package catalog, persisted-operation status, WinPE-cache boundaries, read-only
+USB enumeration, and destructive-operation confirmation guards all passed from
+Medium integrity. The lifecycle evidence and verbose MSI logs were retained in
+the validation machine's temporary evidence directory.
+
+No destructive USB operation was performed for this candidate, and no VMware
+or physical-machine boot result is claimed for version 1.94.1328. The complete
+USB, VMware, and Dell physical boot evidence below applies to the exact
+1.90.1456 artifact identified in its own section.
+
 ## 2026-08-21 — 1.90.1456 installed-product USB validation
 
 ### Candidate identity
