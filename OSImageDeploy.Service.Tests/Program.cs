@@ -572,6 +572,16 @@ try
 	Assert(
 		unsignedHpRejected,
 		"An unsigned HP executable was accepted for privileged extraction.");
+
+	Assert(
+		WindowsWinPeDriverPackageStore.IsAcceptedHpSoftPaqExitCode(0),
+		"A successful HP SoftPaq exit code was rejected.");
+	Assert(
+		WindowsWinPeDriverPackageStore.IsAcceptedHpSoftPaqExitCode(1168),
+		"The HP unpack-only missing-target exit code was rejected.");
+	Assert(
+		!WindowsWinPeDriverPackageStore.IsAcceptedHpSoftPaqExitCode(87),
+		"An unrelated HP SoftPaq error code was accepted.");
 }
 finally
 {
