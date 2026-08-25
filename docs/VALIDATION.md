@@ -5,6 +5,61 @@ the automated test suite. Each result applies only to the identified artifact,
 hardware, and configuration; it is not a claim of compatibility with every
 device or peripheral.
 
+## 2026-08-25 — 1.94.1526 HP WinPE 3.40 preparation validation
+
+### Candidate identity
+
+- Commit: `71f258909bfc16a98281dcd82d7de7af35fb16ee`
+- Installer: `OSImageDeploySuite.msi`
+- Installer size: 163,344,384 bytes
+- Installer SHA-256:
+  `63860AFB782D0BA75C2D0E154C83D0F3F76D16EC03DE30008D639661566D39DF`
+- Authenticode signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`
+- Sectigo RFC 3161 timestamp: present and valid
+
+### Failure reproduction and correction
+
+- The real HP SoftPaq `sp173204.exe` returned Windows exit code `1168` from
+  its supported unpack-only command even though it had extracted 912 files,
+  including 195 INF drivers, under `WinPE10_3.40`.
+- Both supported `/f` argument forms produced byte-for-byte identical extracted
+  trees. The alternate legacy `-pdf` form returned exit code `87` and produced
+  no files with this wrapper.
+- The service now recognizes only HP's `1168` post-extraction result in addition
+  to exit code `0`. It still rejects every other nonzero result and still
+  requires the extracted tree to pass the existing reparse-point, INF, file
+  count, and expanded-size checks before installation.
+
+### Automated, artifact, and installed-product validation
+
+- The serialized x64 Release build completed with zero warnings and errors.
+- The Engine suite passed all 19 checks. The service suite, WinPE driver-package
+  tooling, MSI structure checks, project-owned signature checks, and Microsoft
+  MsiVal2 ICE validation all passed.
+- The exact candidate was signed and timestamped with the hardware-token
+  certificate, then installed as an upgrade with Windows Installer exit code
+  `0`.
+- Installed Apps reported version `1.94.1526`. The service was Running,
+  Automatic, LocalSystem, used the installed executable, and retained its two
+  delayed restart recovery actions.
+- The live named-pipe suite passed from Medium integrity, including read-only USB
+  enumeration and destructive-operation confirmation guards.
+
+### Real HP package result
+
+- Source: HP Client WinPE 10.0 x64 Driver Pack 3.40, `sp173204.exe`.
+- Source SHA-256:
+  `66BAD758AEB46C72ED1A4A4DE3244D635169771DD4705B9C230E2B4A42AFCD66`
+- Source Authenticode status: Valid; signer organization: HP Inc.
+- The installed LocalSystem service prepared the package successfully through
+  the named pipe from a non-elevated client.
+- The resulting managed package was Available, reported version `3.40`, and
+  contained 195 INF drivers. Its managed archive SHA-256 was
+  `8C61331303BD66FE6CB6E27E6F04526A30D7BE26268ACE65833DEE52F09F8E24`.
+- No USB media creation, disk erasure, VMware boot test, or physical-hardware
+  boot test was performed for this correction.
+
 ## 2026-08-25 — 1.94.1328 WinPE driver preparation and lifecycle validation
 
 ### Candidate identity
