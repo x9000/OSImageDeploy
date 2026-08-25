@@ -7,6 +7,7 @@ using OSImageDeploy.Platform.Windows;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
 using Utilities;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using ContractOperationProgress = OSImageDeploy.Contracts.OperationProgress;
@@ -141,6 +142,8 @@ WinPeDriverPackageDescriptor driverPackageSnapshot =
 		SourceVersion = "2026.08",
 		SourcePageUrl = "https://example.com/winpe",
 		PreparationInstructions = "Extract and prepare the package.",
+		PreparationFileExtension = ".cab",
+		CanPrepareAutomatically = true,
 		IsAvailable = true,
 		DriverCount = 12,
 		ArchiveSizeBytes = 3456789,
@@ -161,6 +164,10 @@ Assert(
 	driverPackageRoundTrip.SourcePageUrl == driverPackageSnapshot.SourcePageUrl,
 	"Driver package source URL changed.");
 Assert(
+	driverPackageRoundTrip.PreparationFileExtension == ".cab" &&
+	driverPackageRoundTrip.CanPrepareAutomatically,
+	"Driver package automatic-preparation metadata changed.");
+Assert(
 	driverPackageRoundTrip.IsAvailable &&
 	driverPackageRoundTrip.DriverCount == 12 &&
 	driverPackageRoundTrip.ArchiveSizeBytes == 3456789,
@@ -178,6 +185,25 @@ Assert(
 	"Selected driver package IDs changed across the gRPC contract.");
 
 Console.WriteLine("PASS: WinPE driver package gRPC contract round trip.");
+
+PrepareWinPeDriverPackageRequest preparationRequest = new()
+{
+	PackageId = "dell-winpe",
+	SourceFilePath = @"C:\Downloads\Dell-WinPE.cab",
+	SourceVersion = "A99",
+	ReplaceExistingConfirmed = true
+};
+PrepareWinPeDriverPackageRequest parsedPreparationRequest =
+	PrepareWinPeDriverPackageRequest.Parser.ParseFrom(
+		preparationRequest.ToByteArray());
+Assert(
+	parsedPreparationRequest.PackageId == preparationRequest.PackageId &&
+	parsedPreparationRequest.SourceFilePath ==
+		preparationRequest.SourceFilePath &&
+	parsedPreparationRequest.ReplaceExistingConfirmed,
+	"WinPE driver package preparation request changed across the gRPC contract.");
+
+Console.WriteLine("PASS: WinPE driver package preparation gRPC contract round trip.");
 
 Boolean targetResolverCalled = false;
 Boolean preflightFailureObserved = false;
@@ -323,6 +349,10 @@ try
 		dellPackage.SourcePageUrl.StartsWith("https://www.dell.com/"),
 		"The Dell source guidance was not applied.");
 	Assert(
+		dellPackage.CanPrepareAutomatically &&
+		dellPackage.PreparationFileExtension == ".cab",
+		"The Dell automatic-preparation metadata was not applied.");
+	Assert(
 		!String.IsNullOrWhiteSpace(dellPackage.ArchiveSha256),
 		"The Dell archive hash was not reported.");
 
@@ -332,6 +362,10 @@ try
 	Assert(
 		hpPackage.SourcePageUrl.StartsWith("https://ftp.ext.hp.com/"),
 		"The HP source guidance was not reported.");
+	Assert(
+		hpPackage.CanPrepareAutomatically &&
+		hpPackage.PreparationFileExtension == ".exe",
+		"The HP automatic-preparation metadata was not reported.");
 
 	WinPeDriverPackageDescriptor customPackage = packages.Single(
 		package => package.PackageId == "example-winpe");
@@ -410,6 +444,134 @@ try
 	}
 
 	Assert(unavailableRejected, "An unavailable package selection was accepted.");
+
+	String cabSourceDirectory = Path.Combine(
+		driverExtractionDirectory,
+		"dell-cab-source");
+	String cabSourceInf = Path.Combine(
+		cabSourceDirectory,
+		"automated-dell-driver.inf");
+	String cabSourceReadme = Path.Combine(
+		cabSourceDirectory,
+		"readme.txt");
+	String dellCabPath = Path.Combine(
+		driverExtractionDirectory,
+		"Dell-WinPE-A99.cab");
+	String cabinetDirectivePath = Path.Combine(
+		driverExtractionDirectory,
+		"Dell-WinPE-A99.ddf");
+	Directory.CreateDirectory(cabSourceDirectory);
+	await File.WriteAllTextAsync(
+		cabSourceInf,
+		"[Version]" + Environment.NewLine);
+	await File.WriteAllTextAsync(
+		cabSourceReadme,
+		"Multi-file Dell CAB extraction fixture." + Environment.NewLine);
+	await File.WriteAllLinesAsync(
+		cabinetDirectivePath,
+		[
+			".OPTION EXPLICIT",
+			".Set Cabinet=on",
+			".Set Compress=on",
+			".Set CabinetNameTemplate=Dell-WinPE-A99.cab",
+			$".Set DiskDirectoryTemplate=\"{driverExtractionDirectory}\"",
+			$".Set InfFileName=\"{Path.Combine(driverExtractionDirectory, "makecab.inf")}\"",
+			$".Set RptFileName=\"{Path.Combine(driverExtractionDirectory, "makecab.rpt")}\"",
+			$"\"{cabSourceInf}\"",
+			$"\"{cabSourceReadme}\""
+		]);
+
+	using (Process makeCab = Process.Start(
+		new ProcessStartInfo
+		{
+			FileName = Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.System),
+				"makecab.exe"),
+			UseShellExecute = false,
+			CreateNoWindow = true,
+			ArgumentList =
+			{
+				"/F",
+				cabinetDirectivePath
+			}
+		}) ?? throw new InvalidOperationException("Unable to start makecab.exe."))
+	{
+		await makeCab.WaitForExitAsync();
+		Assert(makeCab.ExitCode == 0, "The Dell CAB test fixture was not created.");
+	}
+
+	Boolean replacementConfirmationRequired = false;
+
+	try
+	{
+		await packageStore.PrepareBuiltInPackageAsync(
+			"dell-winpe",
+			dellCabPath,
+			"A99",
+			replaceExistingConfirmed: false);
+	}
+	catch (InvalidOperationException exception) when (
+		exception.Message.Contains("confirmation"))
+	{
+		replacementConfirmationRequired = true;
+	}
+
+	Assert(
+		replacementConfirmationRequired,
+		"An existing Dell package was replaced without explicit confirmation.");
+
+	WinPeDriverPackageDescriptor preparedDell =
+		await packageStore.PrepareBuiltInPackageAsync(
+			"dell-winpe",
+			dellCabPath,
+			"A99",
+			replaceExistingConfirmed: true);
+	Assert(preparedDell.IsAvailable, "The Dell CAB was not prepared.");
+	Assert(preparedDell.DriverCount == 1, "The prepared Dell INF count was wrong.");
+	Assert(preparedDell.SourceVersion == "A99", "The Dell source version changed.");
+
+	Boolean unsupportedPackageRejected = false;
+
+	try
+	{
+		await packageStore.PrepareBuiltInPackageAsync(
+			"example-winpe",
+			dellCabPath,
+			"1",
+			replaceExistingConfirmed: true);
+	}
+	catch (ArgumentException)
+	{
+		unsupportedPackageRejected = true;
+	}
+
+	Assert(
+		unsupportedPackageRejected,
+		"Automatic preparation accepted a non-built-in package ID.");
+
+	String unsignedHpPath = Path.Combine(
+		driverExtractionDirectory,
+		"sp-test-unsigned.exe");
+	await File.WriteAllBytesAsync(unsignedHpPath, [0x4D, 0x5A, 0x00, 0x00]);
+	Boolean unsignedHpRejected = false;
+
+	try
+	{
+		await packageStore.PrepareBuiltInPackageAsync(
+			"hp-winpe",
+			unsignedHpPath,
+			"test",
+			replaceExistingConfirmed: false);
+	}
+	catch (InvalidDataException exception) when (
+		exception.Message.Contains("Authenticode"))
+	{
+		unsignedHpRejected = true;
+	}
+
+	Assert(
+		unsignedHpRejected,
+		"An unsigned HP executable was accepted for privileged extraction.");
 }
 finally
 {
@@ -425,6 +587,7 @@ finally
 }
 
 Console.WriteLine("PASS: external WinPE driver package store and selection.");
+Console.WriteLine("PASS: built-in WinPE driver package preparation guards.");
 
 if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 {

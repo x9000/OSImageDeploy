@@ -1,0 +1,72 @@
+<Window x:Class="OSImageDeploy.Views.WinPeDriverSupportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WinPE Driver Support"
+        Width="780"
+        Height="650"
+        MinWidth="650"
+        MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        Background="#FFF4F7FB"
+        FontFamily="Segoe UI"
+        Foreground="#FF172B4D">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Background="#FF102A43" Padding="28,22">
+            <StackPanel>
+                <TextBlock Text="Understanding WinPE drivers"
+                           Foreground="White"
+                           FontSize="23"
+                           FontWeight="SemiBold"/>
+                <TextBlock Text="What they are, where they go, and when they are used"
+                           Foreground="#FFB9C9DA"
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="30,24">
+                <TextBlock Text="Why WinPE needs drivers" FontSize="17" FontWeight="SemiBold"/>
+                <TextBlock Text="WinPE is the small deployment environment that boots before Windows is installed. It needs boot-critical drivers—principally storage and network drivers—to see the destination disk, access deployment content, and run the imaging workflow. These are not the full model-driver set installed into the finished Windows operating system."
+                           TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#FF344563"/>
+
+                <TextBlock Text="Why the drivers are downloaded separately" FontSize="17" FontWeight="SemiBold" Margin="0,22,0,0"/>
+                <TextBlock Text="OEM driver packs are not included in the OS Image Deploy MSI. Keeping them separate avoids redistributing manufacturer binaries, allows you to use the current package for your hardware, and keeps the installer substantially smaller. Always use the Official download link shown for the manufacturer and review the vendor's terms."
+                           TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#FF344563"/>
+
+                <TextBlock Text="What Prepare package does" FontSize="17" FontWeight="SemiBold" Margin="0,22,0,0"/>
+                <TextBlock Text="The non-elevated desktop UI lets you choose the downloaded file. The LocalSystem service copies it into protected staging, applies the manufacturer-specific preparation method, rejects packages without INF drivers, creates a validated drivers.zip and package.json manifest, and atomically installs the result. HP executables must also have a valid trusted HP Authenticode signature before they can run."
+                           TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#FF344563"/>
+
+                <TextBlock Text="Where prepared packages are stored" FontSize="17" FontWeight="SemiBold" Margin="0,22,0,0"/>
+                <TextBlock Text="Prepared packages are stored under %ProgramData%\OSImageDeploy\DriverPackages. The directory is restricted to LocalSystem and administrators. The UI receives only package metadata from the service; it does not directly modify the protected store."
+                           TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#FF344563" FontFamily="Segoe UI"/>
+
+                <TextBlock Text="How a package reaches WinPE" FontSize="17" FontWeight="SemiBold" Margin="0,22,0,0"/>
+                <TextBlock Text="Preparing a package does not automatically add it to every USB. Select the manufacturer package in the main window before starting a build. The service re-reads and revalidates that package, includes its content hash in the WinPE cache identity, and injects only the selected INF drivers. If a package is updated or the selection changes, an incompatible old cache is not reused."
+                           TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#FF344563"/>
+
+                <TextBlock Text="What this does not change" FontSize="17" FontWeight="SemiBold" Margin="0,22,0,0"/>
+                <TextBlock Text="Driver preparation does not select or erase a USB disk and does not weaken the destructive-operation safeguards. A USB target must still be rediscovered, revalidated, shown in the confirmation dialog, and explicitly confirmed before disk preparation begins."
+                           TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#FF344563"/>
+
+                <TextBlock Text="Other manufacturers" FontSize="17" FontWeight="SemiBold" Margin="0,22,0,0"/>
+                <TextBlock Text="Automatic preparation is currently limited to the known Dell CAB and HP SoftPaq formats. Administrators can add another manufacturer's WinPE package with the documented Import-WinPeDriverPackage.ps1 workflow. Custom packages use the same protected store, validation, selection, cache identity, and service-side revalidation boundaries."
+                           TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#FF344563"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#FFD8E0EB" BorderThickness="0,1,0,0" Padding="22,14">
+            <Button Content="Close"
+                    Padding="24,8"
+                    HorizontalAlignment="Right"
+                    IsDefault="True"
+                    IsCancel="True"/>
+        </Border>
+    </Grid>
+</Window>

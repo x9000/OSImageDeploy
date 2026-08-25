@@ -274,6 +274,100 @@ namespace OSImageDeploy.Service.Services
 			}
 		}
 
+		public override async Task<WinPeDriverPackage>
+			PrepareWinPeDriverPackage(
+				PrepareWinPeDriverPackageRequest request,
+				ServerCallContext context)
+		{
+			if (String.IsNullOrWhiteSpace(request.PackageId) ||
+				String.IsNullOrWhiteSpace(request.SourceFilePath))
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						"A package ID and manufacturer download path are required."));
+			}
+
+			if (_operationCoordinator.GetActiveOperation() != null)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.ResourceExhausted,
+						"Driver packages cannot be changed during an active USB operation."));
+			}
+
+			try
+			{
+				WinPeDriverPackageDescriptor package =
+					await _driverPackageStore.PrepareBuiltInPackageAsync(
+						request.PackageId,
+						request.SourceFilePath,
+						request.SourceVersion,
+						request.ReplaceExistingConfirmed,
+						context.CancellationToken);
+
+				_logger.LogInformation(
+					"WinPE driver package {PackageId} was prepared with {DriverCount} INF files and archive hash {ArchiveSha256}.",
+					package.PackageId,
+					package.DriverCount,
+					package.ArchiveSha256);
+
+				return GrpcWinPeDriverPackageMapper.ToMessage(package);
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (ArgumentException exception)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						exception.Message));
+			}
+			catch (FileNotFoundException exception)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.NotFound,
+						exception.Message));
+			}
+			catch (UnauthorizedAccessException)
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.FailedPrecondition,
+						"The service cannot read the selected download. " +
+						"Copy it to a local folder that SYSTEM can access and try again."));
+			}
+			catch (Exception exception) when (
+				exception is InvalidDataException or
+				InvalidOperationException)
+			{
+				_logger.LogWarning(
+					exception,
+					"WinPE driver package {PackageId} was rejected during preparation.",
+					request.PackageId);
+
+				throw new RpcException(
+					new Status(
+						StatusCode.FailedPrecondition,
+						exception.Message));
+			}
+			catch (Exception exception)
+			{
+				_logger.LogError(
+					exception,
+					"WinPE driver package {PackageId} preparation failed.",
+					request.PackageId);
+
+				throw new RpcException(
+					new Status(
+						StatusCode.Internal,
+						"The WinPE driver package could not be prepared."));
+			}
+		}
+
 		public override async Task WatchUsbMediaBuild(
 			UsbMediaOperationRequest request,
 			IServerStreamWriter<UsbMediaOperationUpdate> responseStream,

@@ -64,10 +64,11 @@ three-partition GPT layout, a healthy FAT32 `WINPE` volume and a healthy NTFS
 passed again afterward from Medium integrity.
 
 This exact `1.90.1456` artifact has completed automated, signed-artifact,
-installed-product, and destructive USB-media validation. VMware boot and
-physical-hardware boot testing have not yet been performed for this exact
-artifact; the successful boot results in the next candidate section apply to
-`1.90.1152`.
+installed-product, destructive USB-media, VMware Workstation boot, and physical
+hardware boot validation. The resulting USB booted successfully in a VMware
+Workstation virtual machine and on a Dell laptop. These results validate the
+observed virtual UEFI path and that physical Dell boot path; they do not claim
+compatibility with every firmware, model, or peripheral.
 
 ## 2026-08-21 — 1.90.1152 installed-product candidate
 
