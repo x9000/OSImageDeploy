@@ -46,6 +46,34 @@ device or peripheral.
 - The live named-pipe suite passed from Medium integrity, including read-only USB
   enumeration and destructive-operation confirmation guards.
 
+### Installer lifecycle and final installed-product validation
+
+On 2026-08-26, the exact signed `1.94.1526` candidate completed the release
+lifecycle harness using the signed `v1.83.1056` production MSI as the older
+input. Both installers had valid timestamped signatures from the expected
+certificate and shared UpgradeCode
+`{64552430-8321-4966-B779-B464DF8D6E86}`. The older installer SHA-256 was
+`77F376194E58880A56C0611A8A7935C34577BCD6119F6A2E99CF92FBCF276E1C`.
+
+- current-version installation: exit code `0`;
+- forced repair: exit code `0`;
+- older-version downgrade attempt: correctly rejected with exit code `1603`
+  and newer-product evidence;
+- current-version uninstall and removal checks: exit code `0`;
+- current-version clean reinstall: exit code `0`;
+- final result: Passed.
+
+After the final reinstall, the complete installed-product validation passed
+from Medium integrity. Installed Apps reported `1.94.1526`; the service was
+Running, Automatic, LocalSystem, used the installed executable, and retained
+its two delayed restart recovery actions. All project-owned installed files
+had valid timestamped signatures. The live named-pipe, package-catalog,
+read-only USB-enumeration, persisted-operation, WinPE-cache, and destructive-
+operation guard checks passed, and the installed non-elevated UI opened and
+responded normally. Microsoft MsiVal2 ICE validation also completed without
+findings. No destructive USB operation was performed during this lifecycle
+run.
+
 ### Real HP package result
 
 - Source: HP Client WinPE 10.0 x64 Driver Pack 3.40, `sp173204.exe`.
