@@ -68,12 +68,14 @@ device or peripheral.
   machine.
 - The same media also booted successfully on the physical Dell laptop used for
   the preceding Dell validation.
+- On 2026-08-26, the same media booted successfully on a physical HP EliteDesk
+  800 G3 PC.
 - These results validate the observed combined-package media-creation path, the
-  VMware virtual boot path, and that physical Dell boot path. They do not yet
-  validate booting the media on physical HP hardware.
-- A physical HP boot test is planned when that in-use device can be fitted with
-  a replaceable test disk. No HP rebuild or full Windows deployment result is
-  claimed at this stage.
+  VMware virtual boot path, the physical Dell boot path, and the physical HP
+  EliteDesk 800 G3 boot path.
+- The HP result is physical boot validation. No full Windows deployment or
+  post-installation driver validation on the HP device is claimed at this
+  stage.
 
 ## 2026-08-25 — 1.94.1328 WinPE driver preparation and lifecycle validation
 
