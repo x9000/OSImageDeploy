@@ -74,6 +74,22 @@ responded normally. Microsoft MsiVal2 ICE validation also completed without
 findings. No destructive USB operation was performed during this lifecycle
 run.
 
+### RC1 and production promotion
+
+- Candidate tag: `v1.94.1526-rc.1`;
+- production tag: `v1.94.1526`;
+- both annotated tags resolve to commit
+  `71f258909bfc16a98281dcd82d7de7af35fb16ee`;
+- GitHub published the candidate as a prerelease and the production release as
+  the latest release;
+- the RC asset was downloaded from GitHub immediately before production
+  promotion and independently rechecked for size, SHA-256, signer thumbprint,
+  and timestamp;
+- the production MSI was promoted from those exact downloaded RC bytes and was
+  not rebuilt;
+- GitHub reports the expected asset size and SHA-256 digest for both releases;
+- open GitHub pull requests and issues at promotion time: none.
+
 ### Real HP package result
 
 - Source: HP Client WinPE 10.0 x64 Driver Pack 3.40, `sp173204.exe`.
