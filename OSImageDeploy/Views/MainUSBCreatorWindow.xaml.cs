@@ -65,7 +65,8 @@ namespace OSImageDeploy.Views
 			if (dialog.ShowDialog() == true &&
 				DataContext is MainUSBCreatorWindowViewModel viewModel)
 			{
-				await viewModel.RefreshWinPeDriverPackagesAsync();
+				await viewModel.RefreshWinPeDriverPackagesAsync(
+					package.PackageId);
 			}
 		}
 

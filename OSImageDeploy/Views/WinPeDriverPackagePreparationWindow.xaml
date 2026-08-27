@@ -17,6 +17,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Border Background="#FF102A43" Padding="26,20">
@@ -59,18 +60,6 @@
                             Click="BrowseButtonClick"/>
                 </Grid>
 
-                <TextBlock Text="Package version (optional)"
-                           FontWeight="SemiBold"
-                           Margin="0,18,0,7"/>
-                <TextBox x:Name="SourceVersionTextBox"
-                         Padding="10,8"
-                         BorderBrush="#FFB8C4D6"/>
-                <TextBlock Text="Leave this blank to use version information from the download or its file name."
-                           TextWrapping="Wrap"
-                           Foreground="#FF5E6C84"
-                           FontSize="12"
-                           Margin="0,5,0,0"/>
-
                 <Border Background="#FFEAF1FB"
                         BorderBrush="#FFC8D8ED"
                         BorderThickness="1"
@@ -87,18 +76,21 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock x:Name="StatusTextBlock"
-                           TextWrapping="Wrap"
-                           Margin="0,20,0,0"/>
-                <ProgressBar x:Name="PreparationProgressBar"
-                             Height="8"
-                             IsIndeterminate="True"
-                             Visibility="Collapsed"
-                             Margin="0,10,0,0"/>
             </StackPanel>
         </ScrollViewer>
 
-        <Border Grid.Row="2"
+		<StackPanel Grid.Row="2"
+					Margin="26,0,26,14">
+			<TextBlock x:Name="StatusTextBlock"
+					   TextWrapping="Wrap"/>
+			<ProgressBar x:Name="PreparationProgressBar"
+						 Height="8"
+						 IsIndeterminate="True"
+						 Visibility="Collapsed"
+						 Margin="0,10,0,0"/>
+		</StackPanel>
+
+		<Border Grid.Row="3"
                 Background="White"
                 BorderBrush="#FFD8E0EB"
                 BorderThickness="0,1,0,0"
