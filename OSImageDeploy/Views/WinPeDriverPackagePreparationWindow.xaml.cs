@@ -110,7 +110,7 @@ namespace OSImageDeploy.Views
 					await client.PrepareWinPeDriverPackageAsync(
 						_package.PackageId,
 						SourcePathTextBox.Text,
-						SourceVersionTextBox.Text,
+						String.Empty,
 						replaceConfirmed,
 						_cancellationTokenSource.Token);
 
@@ -165,7 +165,6 @@ namespace OSImageDeploy.Views
 		{
 			_isPreparing = isPreparing;
 			BrowseButton.IsEnabled = !isPreparing;
-			SourceVersionTextBox.IsEnabled = !isPreparing;
 			PrepareButton.IsEnabled = !isPreparing;
 			PreparationProgressBar.Visibility = isPreparing
 				? Visibility.Visible

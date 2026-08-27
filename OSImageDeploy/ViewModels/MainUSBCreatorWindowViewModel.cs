@@ -62,10 +62,14 @@ namespace ViewModels
 		private String _winPeCacheDetailsText = "";
 		private String _winPeDriverPackagesStatusText =
 			"Optional WinPE drivers: Checking...";
+		private String _prerequisiteProgressText = "";
 		private String _activeOperationId = "";
 		private String _titleTextBlockText = GetApplicationTitle();
 		private Int32 _operationProgressValue;
+		private Int32 _prerequisiteProgressValue;
 		private Visibility _operationProgressVisibility = Visibility.Collapsed;
+		private Visibility _prerequisiteProgressVisibility = Visibility.Collapsed;
+		private Boolean _prerequisiteProgressIsIndeterminate;
 		private int _usbComboxSelectedItemIndex;
 		private bool _createUSBButtonEnabled = false;
 		private bool _cancelUSBButtonEnabled = false;
@@ -193,6 +197,47 @@ namespace ViewModels
 			{
 				_winPeDriverPackagesStatusText = value;
 				NotifyPropertyChanged(nameof(WinPeDriverPackagesStatusText));
+			}
+		}
+
+		public String PrerequisiteProgressText
+		{
+			get => _prerequisiteProgressText;
+			set
+			{
+				_prerequisiteProgressText = value;
+				NotifyPropertyChanged(nameof(PrerequisiteProgressText));
+			}
+		}
+
+		public Int32 PrerequisiteProgressValue
+		{
+			get => _prerequisiteProgressValue;
+			set
+			{
+				_prerequisiteProgressValue = Math.Clamp(value, 0, 100);
+				NotifyPropertyChanged(nameof(PrerequisiteProgressValue));
+			}
+		}
+
+		public Visibility PrerequisiteProgressVisibility
+		{
+			get => _prerequisiteProgressVisibility;
+			set
+			{
+				_prerequisiteProgressVisibility = value;
+				NotifyPropertyChanged(nameof(PrerequisiteProgressVisibility));
+			}
+		}
+
+		public Boolean PrerequisiteProgressIsIndeterminate
+		{
+			get => _prerequisiteProgressIsIndeterminate;
+			set
+			{
+				_prerequisiteProgressIsIndeterminate = value;
+				NotifyPropertyChanged(
+					nameof(PrerequisiteProgressIsIndeterminate));
 			}
 		}
 
@@ -372,30 +417,57 @@ namespace ViewModels
 			}
 		}
 
-		public async Task RefreshWinPeDriverPackagesAsync()
+		public async Task RefreshWinPeDriverPackagesAsync(
+			String packageIdToSelect = null)
 		{
 			try
 			{
 				IReadOnlyList<WinPeDriverPackageDescriptor> packages =
 					await _serviceClient.GetWinPeDriverPackagesAsync();
 
-				HashSet<String> selectedIds = WinPeDriverPackages
-					.Where(package => package.IsSelected)
-					.Select(package => package.Package.PackageId)
-					.ToHashSet(StringComparer.OrdinalIgnoreCase);
+				Dictionary<String, (Boolean WasAvailable, Boolean WasSelected)>
+					previousStates = WinPeDriverPackages.ToDictionary(
+						selection => selection.Package.PackageId,
+						selection => (
+							selection.Package.IsAvailable,
+							selection.IsSelected),
+						StringComparer.OrdinalIgnoreCase);
 
 				WinPeDriverPackages.Clear();
 
 				foreach (WinPeDriverPackageDescriptor package in packages)
 				{
+					Boolean shouldSelect = false;
+
+					if (package.IsAvailable)
+					{
+						if (previousStates.TryGetValue(
+							package.PackageId,
+							out var previousState))
+						{
+							shouldSelect =
+								previousState.WasSelected ||
+								!previousState.WasAvailable;
+						}
+						else
+						{
+							shouldSelect = true;
+						}
+
+						if (package.PackageId.Equals(
+							packageIdToSelect,
+							StringComparison.OrdinalIgnoreCase))
+						{
+							shouldSelect = true;
+						}
+					}
+
 					WinPeDriverPackageSelectionModel selection =
 						new WinPeDriverPackageSelectionModel
 						{
 							Package = package
 						};
-					selection.IsSelected =
-						package.IsAvailable &&
-						selectedIds.Contains(package.PackageId);
+					selection.IsSelected = shouldSelect;
 					WinPeDriverPackages.Add(selection);
 				}
 
@@ -475,6 +547,11 @@ namespace ViewModels
 		{
 			PreReqInstallButtonEnabled = false;
 			ExitButtonEnabled = false;
+			PrerequisiteProgressValue = 0;
+			PrerequisiteProgressIsIndeterminate = true;
+			PrerequisiteProgressText =
+				"Preparing Windows ADK and Windows PE setup...";
+			PrerequisiteProgressVisibility = Visibility.Visible;
 
 			try
 			{
@@ -971,20 +1048,30 @@ namespace ViewModels
 
 		private void Installer_ProgressChanged(object sender, WindowsAdkWinPeInstaller.InstallerProgressEventArgs e)
 		{
-			String updateText = "";
+			String updateText = e.Stage + Environment.NewLine + e.Message;
 
 			if (e.Percent.HasValue)
 			{
-				updateText = "Progress: " + e.Percent.Value + "% - ";
+				PrerequisiteProgressValue = e.Percent.Value;
+				PrerequisiteProgressIsIndeterminate = false;
 			}
-
-			updateText += e.Stage + "\n" + e.Message;
-
-			if (e.Stage == "Installer")
+			else
 			{
-				updateText += "\nWARNING! Install in progress. Please wait. This will take a minute or two.";
+				PrerequisiteProgressIsIndeterminate =
+					e.Stage != "Completed" &&
+					e.Stage != "Failed" &&
+					e.Stage != "Cancelled";
 			}
 
+			if (e.Stage.Equals("Installer", StringComparison.OrdinalIgnoreCase))
+			{
+				updateText += Environment.NewLine +
+					"Microsoft setup is running quietly. This can take several " +
+					"minutes; the application is still working.";
+			}
+
+			PrerequisiteProgressText = updateText;
+			PrerequisiteProgressVisibility = Visibility.Visible;
 			InfoTextBlockText = updateText;
 		}
 
