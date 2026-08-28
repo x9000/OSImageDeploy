@@ -19,18 +19,22 @@ The service permits an in-place refresh only when all of the following are true:
 
 - the selected physical disk is still the same healthy, writable, non-system,
   non-boot USB disk shown by the desktop;
-- the disk uses GPT and contains exactly two partitions;
+- the disk uses GPT and contains the two OSImageDeploy content partitions;
+- one hidden, unformatted Microsoft Reserved (MSR) partition of no more than
+  128 MB is permitted before `WinPE`; Windows can create this automatically
+  when a USB enclosure presents an NVMe or other device as fixed media;
 - exactly one partition is labelled `WinPE`, uses FAT32, is at least 4 GB, has a
   drive letter, and appears before the data partition;
 - exactly one partition is labelled `BuildData`, uses NTFS, and has a drive
   letter;
 - the `BuildData` partition contains both `DriverPacks` and `WindowsImages`.
 
-An unexpected partition, label, filesystem, missing folder, unavailable drive
-letter, or other ambiguous state rejects preservation. The confirmation dialog
-then explains that the existing layout cannot be preserved and offers the
-normal, separately confirmed full rebuild. Cancelling that confirmation leaves
-the disk unchanged.
+Any other extra partition—including an additional, oversized, formatted,
+labelled, or misplaced MSR—rejects preservation. An unexpected label,
+filesystem, missing folder, unavailable drive letter, or other ambiguous state
+also rejects it. The confirmation dialog then explains that the existing layout
+cannot be preserved and offers the normal, separately confirmed full rebuild.
+Cancelling that confirmation leaves the disk unchanged.
 
 ## Operation ordering
 

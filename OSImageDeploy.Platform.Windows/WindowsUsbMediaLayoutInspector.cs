@@ -29,7 +29,8 @@ namespace OSImageDeploy.Platform.Windows
 				"WQL",
 				$"SELECT * FROM MSFT_Partition WHERE DiskNumber = {diskNumber}"))
 			{
-				String driveLetter = GetString(partition, "DriveLetter");
+				String driveLetter = NormalizeDriveLetter(
+					GetString(partition, "DriveLetter"));
 				CimInstance? volume = GetVolume(session, driveLetter);
 				String rootPath = String.IsNullOrWhiteSpace(driveLetter)
 					? String.Empty
@@ -53,6 +54,11 @@ namespace OSImageDeploy.Platform.Windows
 							? String.Empty
 							: GetString(volume, "FileSystemLabel"),
 						DriveLetter = driveLetter,
+						GptType = GetString(partition, "GptType"),
+						IsHidden = GetValue(
+							partition,
+							"IsHidden",
+							false),
 						HasDriverPacksFolder =
 							!String.IsNullOrWhiteSpace(rootPath) &&
 							Directory.Exists(Path.Combine(rootPath, "DriverPacks")),
@@ -93,6 +99,14 @@ namespace OSImageDeploy.Platform.Windows
 				"WQL",
 				$"SELECT * FROM MSFT_Volume WHERE DriveLetter = '{normalizedDriveLetter}'")
 				.SingleOrDefault();
+		}
+
+		private static String NormalizeDriveLetter(String driveLetter)
+		{
+			return driveLetter.Length == 1 &&
+				Char.IsLetter(driveLetter[0])
+					? Char.ToUpperInvariant(driveLetter[0]).ToString()
+					: String.Empty;
 		}
 
 		private static String GetString(

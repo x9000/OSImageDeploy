@@ -15,8 +15,11 @@ List<(String Name, Action Test)> tests = new()
 	("Missing target is rejected", MissingTargetIsRejected),
 	("Reassigned disk number is accepted with warning", ReassignedDiskNumberIsAccepted),
 	("Existing OSImageDeploy layout is refreshable", ExistingLayoutIsRefreshable),
+	("Refresh accepts one standard Microsoft Reserved partition", RefreshAcceptsMicrosoftReservedPartition),
 	("Refresh rejects a non-FAT32 boot partition", RefreshRejectsNonFatBootPartition),
 	("Refresh rejects missing preserved-data folders", RefreshRejectsMissingDataFolders),
+	("Refresh rejects an invalid Microsoft Reserved partition", RefreshRejectsInvalidMicrosoftReservedPartition),
+	("Refresh rejects a misplaced Microsoft Reserved partition", RefreshRejectsMisplacedMicrosoftReservedPartition),
 	("Refresh rejects unexpected extra partitions", RefreshRejectsExtraPartitions)
 };
 
@@ -175,6 +178,21 @@ static void RefreshRejectsNonFatBootPartition()
 		"The boot filesystem rejection was not explained.");
 }
 
+static void RefreshAcceptsMicrosoftReservedPartition()
+{
+	UsbMediaRefreshValidationResult result =
+		UsbMediaRefreshSafetyPolicy.Validate(
+			CreateRefreshLayout(includeMicrosoftReservedPartition: true));
+
+	Assert(result.IsEligible, result.Summary);
+	Assert(
+		result.BootPartition?.PartitionNumber == 2,
+		"The WinPE partition after the MSR was not identified.");
+	Assert(
+		result.DataPartition?.PartitionNumber == 3,
+		"The BuildData partition after the MSR was not identified.");
+}
+
 static void RefreshRejectsMissingDataFolders()
 {
 	UsbMediaRefreshValidationResult result =
@@ -213,6 +231,66 @@ static void RefreshRejectsExtraPartitions()
 	Assert(
 		result.Summary.Contains("exactly", StringComparison.OrdinalIgnoreCase),
 		"The unexpected partition rejection was not explained.");
+}
+
+static void RefreshRejectsInvalidMicrosoftReservedPartition()
+{
+	UsbMediaLayoutDescriptor layout =
+		CreateRefreshLayout(includeMicrosoftReservedPartition: true);
+	UsbMediaPartitionDescriptor reservedPartition = layout.Partitions[0];
+	UsbMediaRefreshValidationResult result =
+		UsbMediaRefreshSafetyPolicy.Validate(
+			new UsbMediaLayoutDescriptor
+			{
+				PartitionStyle = layout.PartitionStyle,
+				Partitions = new[]
+				{
+					new UsbMediaPartitionDescriptor
+					{
+						PartitionNumber = reservedPartition.PartitionNumber,
+						SizeBytes = 256UL * 1024 * 1024,
+						GptType = reservedPartition.GptType,
+						IsHidden = true
+					}
+				}.Concat(layout.Partitions.Skip(1)).ToList()
+			});
+
+	Assert(!result.IsEligible, "An oversized Microsoft Reserved partition was accepted.");
+	Assert(
+		result.Summary.Contains(
+			"unexpected attributes",
+			StringComparison.OrdinalIgnoreCase),
+		"The invalid Microsoft Reserved partition rejection was not explained.");
+}
+
+static void RefreshRejectsMisplacedMicrosoftReservedPartition()
+{
+	UsbMediaLayoutDescriptor layout = CreateRefreshLayout();
+	UsbMediaRefreshValidationResult result =
+		UsbMediaRefreshSafetyPolicy.Validate(
+			new UsbMediaLayoutDescriptor
+			{
+				PartitionStyle = layout.PartitionStyle,
+				Partitions = layout.Partitions.Concat(
+					new[]
+					{
+						new UsbMediaPartitionDescriptor
+						{
+							PartitionNumber = 3,
+							SizeBytes = 16UL * 1024 * 1024,
+							GptType =
+								"{E3C9E316-0B5C-4DB8-817D-F92DF00215AE}",
+							IsHidden = true
+						}
+					}).ToList()
+			});
+
+	Assert(!result.IsEligible, "A misplaced Microsoft Reserved partition was accepted.");
+	Assert(
+		result.Summary.Contains(
+			"not positioned before",
+			StringComparison.OrdinalIgnoreCase),
+		"The misplaced Microsoft Reserved partition rejection was not explained.");
 }
 
 static Task UnconfirmedOperationIsRejected()
@@ -598,16 +676,30 @@ static UsbTargetDescriptor CreateTarget(
 static UsbMediaLayoutDescriptor CreateRefreshLayout(
 	String bootFileSystem = "FAT32",
 	Boolean hasDriverPacksFolder = true,
-	Boolean hasWindowsImagesFolder = true)
+	Boolean hasWindowsImagesFolder = true,
+	Boolean includeMicrosoftReservedPartition = false)
 {
-	return new UsbMediaLayoutDescriptor
+	UInt32 partitionNumberOffset = includeMicrosoftReservedPartition ? 1U : 0U;
+	List<UsbMediaPartitionDescriptor> partitions = new();
+
+	if (includeMicrosoftReservedPartition)
 	{
-		PartitionStyle = "GPT",
-		Partitions = new[]
-		{
+		partitions.Add(
 			new UsbMediaPartitionDescriptor
 			{
 				PartitionNumber = 1,
+				SizeBytes = 16UL * 1024 * 1024,
+				GptType = "{E3C9E316-0B5C-4DB8-817D-F92DF00215AE}",
+				IsHidden = true
+			});
+	}
+
+	partitions.AddRange(
+		new[]
+		{
+			new UsbMediaPartitionDescriptor
+			{
+				PartitionNumber = 1 + partitionNumberOffset,
 				SizeBytes = 4UL * 1024 * 1024 * 1024,
 				FileSystem = bootFileSystem,
 				Label = "WinPE",
@@ -615,7 +707,7 @@ static UsbMediaLayoutDescriptor CreateRefreshLayout(
 			},
 			new UsbMediaPartitionDescriptor
 			{
-				PartitionNumber = 2,
+				PartitionNumber = 2 + partitionNumberOffset,
 				SizeBytes = 60UL * 1024 * 1024 * 1024,
 				FileSystem = "NTFS",
 				Label = "BuildData",
@@ -623,7 +715,12 @@ static UsbMediaLayoutDescriptor CreateRefreshLayout(
 				HasDriverPacksFolder = hasDriverPacksFolder,
 				HasWindowsImagesFolder = hasWindowsImagesFolder
 			}
-		}
+		});
+
+	return new UsbMediaLayoutDescriptor
+	{
+		PartitionStyle = "GPT",
+		Partitions = partitions
 	};
 }
 

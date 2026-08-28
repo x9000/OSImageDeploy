@@ -20,6 +20,10 @@ namespace OSImageDeploy.Contracts
 
 		public String DriveLetter { get; init; } = String.Empty;
 
+		public String GptType { get; init; } = String.Empty;
+
+		public Boolean IsHidden { get; init; }
+
 		public Boolean HasDriverPacksFolder { get; init; }
 
 		public Boolean HasWindowsImagesFolder { get; init; }
