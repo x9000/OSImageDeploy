@@ -80,6 +80,18 @@
 			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).dll" Condition="Exists('$(PublishDir)$(AssemblyName).dll')" />
 
 			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).exe" Condition="Exists('$(PublishDir)$(AssemblyName).exe')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)MVVMLibrary.dll" Condition="Exists('$(PublishDir)MVVMLibrary.dll')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)OSImageDeploy.Client.dll" Condition="Exists('$(PublishDir)OSImageDeploy.Client.dll')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)OSImageDeploy.Contracts.dll" Condition="Exists('$(PublishDir)OSImageDeploy.Contracts.dll')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)OSImageDeploy.Engine.dll" Condition="Exists('$(PublishDir)OSImageDeploy.Engine.dll')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)OSImageDeploy.Transport.Grpc.dll" Condition="Exists('$(PublishDir)OSImageDeploy.Transport.Grpc.dll')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)Utilities.dll" Condition="Exists('$(PublishDir)Utilities.dll')" />
 		</ItemGroup>
 
 		<Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(SigningScriptPath)&quot; -FilePath &quot;%(PublishedFilesToSign.FullPath)&quot; -CertificateThumbprint &quot;$(CodeSigningCertificateThumbprint)&quot;" />

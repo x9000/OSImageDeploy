@@ -54,6 +54,12 @@
 
 			<PublishedFilesToSign Include="$(PublishDir)$(AssemblyName).exe"
 								  Condition="Exists('$(PublishDir)$(AssemblyName).exe')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)MVVMLibrary.dll"
+								  Condition="Exists('$(PublishDir)MVVMLibrary.dll')" />
+
+			<PublishedFilesToSign Include="$(PublishDir)Utilities.dll"
+								  Condition="Exists('$(PublishDir)Utilities.dll')" />
 		</ItemGroup>
 
 		<Exec Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(SigningScriptPath)&quot; -FilePath &quot;%(PublishedFilesToSign.FullPath)&quot; -CertificateThumbprint &quot;$(CodeSigningCertificateThumbprint)&quot;" />

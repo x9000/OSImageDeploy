@@ -205,7 +205,17 @@ Write-Host 'PASS: Service recovery policy has two 120-second restarts and a one-
 
 $installedFiles = @(
 	(Join-Path $resolvedInstallDirectory 'OSImageDeploy.exe'),
+	(Join-Path $resolvedInstallDirectory 'OSImageDeploy.dll'),
+	(Join-Path $resolvedInstallDirectory 'MVVMLibrary.dll'),
+	(Join-Path $resolvedInstallDirectory 'OSImageDeploy.Client.dll'),
+	(Join-Path $resolvedInstallDirectory 'OSImageDeploy.Contracts.dll'),
+	(Join-Path $resolvedInstallDirectory 'OSImageDeploy.Engine.dll'),
+	(Join-Path $resolvedInstallDirectory 'OSImageDeploy.Transport.Grpc.dll'),
+	(Join-Path $resolvedInstallDirectory 'Utilities.dll'),
 	(Join-Path $resolvedInstallDirectory 'WinPEClient\OSImageDeployClient.exe'),
+	(Join-Path $resolvedInstallDirectory 'WinPEClient\OSImageDeployClient.dll'),
+	(Join-Path $resolvedInstallDirectory 'WinPEClient\MVVMLibrary.dll'),
+	(Join-Path $resolvedInstallDirectory 'WinPEClient\Utilities.dll'),
 	(Join-Path $resolvedInstallDirectory 'Service\OSImageDeploy.Contracts.dll'),
 	(Join-Path $resolvedInstallDirectory 'Service\OSImageDeploy.Engine.dll'),
 	(Join-Path $resolvedInstallDirectory 'Service\OSImageDeploy.Platform.Windows.dll'),
@@ -213,7 +223,10 @@ $installedFiles = @(
 	(Join-Path $resolvedInstallDirectory 'Service\OSImageDeploy.Service.exe'),
 	(Join-Path $resolvedInstallDirectory 'Service\OSImageDeploy.Transport.Grpc.dll'),
 	(Join-Path $resolvedInstallDirectory 'Service\Utilities.dll'),
-	(Join-Path $resolvedInstallDirectory 'Service\WinPEClient\OSImageDeployClient.exe')
+	(Join-Path $resolvedInstallDirectory 'Service\WinPEClient\OSImageDeployClient.exe'),
+	(Join-Path $resolvedInstallDirectory 'Service\WinPEClient\OSImageDeployClient.dll'),
+	(Join-Path $resolvedInstallDirectory 'Service\WinPEClient\MVVMLibrary.dll'),
+	(Join-Path $resolvedInstallDirectory 'Service\WinPEClient\Utilities.dll')
 )
 
 foreach ($installedFile in $installedFiles)
