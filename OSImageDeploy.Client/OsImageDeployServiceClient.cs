@@ -4,6 +4,8 @@ using OSImageDeploy.Contracts;
 using OSImageDeploy.Engine;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
+using ContractUsbMediaBuildMode = OSImageDeploy.Contracts.UsbMediaBuildMode;
+using GrpcUsbMediaBuildMode = OSImageDeploy.Transport.Grpc.V1.UsbMediaBuildMode;
 using System.Runtime.CompilerServices;
 
 namespace OSImageDeploy.Client
@@ -105,6 +107,17 @@ namespace OSImageDeploy.Client
 						RebuildWinPeCache = request.RebuildWinPeCache
 					};
 
+				message.BuildMode = request.BuildMode switch
+				{
+					ContractUsbMediaBuildMode.FullRebuild =>
+						GrpcUsbMediaBuildMode.FullRebuild,
+					ContractUsbMediaBuildMode.RefreshBootPartition =>
+						GrpcUsbMediaBuildMode.RefreshBootPartition,
+					_ => throw new ArgumentOutOfRangeException(
+						nameof(request),
+						"The USB media build mode is not supported.")
+				};
+
 				message.WinPeDriverPackageIds.AddRange(
 					request.WinPeDriverPackageIds);
 
@@ -115,6 +128,46 @@ namespace OSImageDeploy.Client
 						cancellationToken: cancellationToken);
 
 				return GrpcOperationMapper.ToSnapshot(response);
+			}
+			catch (RpcException exception)
+			{
+				throw TranslateException(exception, cancellationToken);
+			}
+		}
+
+		public async Task<UsbMediaRefreshValidationResult>
+			ValidateUsbMediaRefreshAsync(
+				UsbTargetDescriptor target,
+				CancellationToken cancellationToken = default)
+		{
+			ArgumentNullException.ThrowIfNull(target);
+
+			try
+			{
+				ValidateUsbMediaRefreshResponse response =
+					await _client.ValidateUsbMediaRefreshAsync(
+						new ValidateUsbMediaRefreshRequest
+						{
+							SelectedTarget = GrpcTargetMapper.ToMessage(target)
+						},
+						deadline: DateTime.UtcNow.Add(RequestTimeout),
+						cancellationToken: cancellationToken);
+
+				return new UsbMediaRefreshValidationResult
+				{
+					IsEligible = response.IsEligible,
+					Summary = response.Summary,
+					Warnings = response.Warnings.ToList(),
+					ResolvedTarget = response.ResolvedTarget == null
+						? null
+						: GrpcTargetMapper.ToDescriptor(response.ResolvedTarget),
+					BootPartition = response.BootPartition == null
+						? null
+						: ToDescriptor(response.BootPartition),
+					DataPartition = response.DataPartition == null
+						? null
+						: ToDescriptor(response.DataPartition)
+				};
 			}
 			catch (RpcException exception)
 			{
@@ -380,6 +433,21 @@ namespace OSImageDeploy.Client
 		public void Dispose()
 		{
 			_channel.Dispose();
+		}
+
+		private static UsbMediaPartitionDescriptor ToDescriptor(
+			UsbMediaPartition partition)
+		{
+			return new UsbMediaPartitionDescriptor
+			{
+				PartitionNumber = partition.PartitionNumber,
+				SizeBytes = partition.SizeBytes,
+				FileSystem = partition.FileSystem,
+				Label = partition.Label,
+				DriveLetter = partition.DriveLetter,
+				HasDriverPacksFolder = partition.HasDriverPacksFolder,
+				HasWindowsImagesFolder = partition.HasWindowsImagesFolder
+			};
 		}
 
 		private static Exception TranslateException(

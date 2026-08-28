@@ -208,6 +208,159 @@ namespace Utilities
 				CancellationToken.None);
 		}
 
+		public Task RefreshBootPartitionAsync(
+			Func<CancellationToken, Task<UsbBootPartitionRefreshTarget>>
+				resolveRefreshTargetAsync,
+			CancellationToken cancellationToken = default)
+		{
+			ArgumentNullException.ThrowIfNull(resolveRefreshTargetAsync);
+
+			ResetOverallProgress();
+			OnPhaseProgress(
+				DiskBuildPhase.Cleanup,
+				"Preparing to refresh the selected USB boot partition.",
+				0);
+
+			return Task.Run(
+				() => RefreshBootPartition(
+					resolveRefreshTargetAsync,
+					cancellationToken),
+				cancellationToken);
+		}
+
+		private async Task RefreshBootPartition(
+			Func<CancellationToken, Task<UsbBootPartitionRefreshTarget>>
+				resolveRefreshTargetAsync,
+			CancellationToken cancellationToken)
+		{
+			OnPhaseProgress(
+				DiskBuildPhase.Cleanup,
+				"Removing temporary WinPE working folders.",
+				0);
+
+			DeleteAbandonedTemporaryFolders();
+			cancellationToken.ThrowIfCancellationRequested();
+
+			OnPhaseProgress(
+				DiskBuildPhase.Cleanup,
+				"Temporary folder cleanup complete.",
+				100);
+
+			WinPeBuildResult buildResult =
+				await _buildWinPeMediaAsync(cancellationToken);
+
+			try
+			{
+				UsbBootPartitionRefreshTarget refreshTarget =
+					await resolveRefreshTargetAsync(cancellationToken);
+
+				cancellationToken.ThrowIfCancellationRequested();
+
+				IReadOnlyList<Int64> mediaFileLengths = Directory
+					.EnumerateFiles(
+						buildResult.MediaFolder,
+						"*",
+						SearchOption.AllDirectories)
+					.Select(path => new FileInfo(path).Length)
+					.ToList();
+				UInt64 requiredSizeBytes =
+					CalculateRefreshPayloadRequiredSize(mediaFileLengths);
+
+				if (requiredSizeBytes > refreshTarget.SizeBytes)
+				{
+					throw new InvalidOperationException(
+						"The existing WinPE partition is not large enough for the newly built boot media.");
+				}
+
+				using CimSession session = CimSession.Create(null);
+				CimInstance bootPartition = session.QueryInstances(
+					Ns,
+					"WQL",
+					$"SELECT * FROM MSFT_Partition WHERE " +
+					$"DiskNumber = {refreshTarget.DiskNumber} AND " +
+					$"PartitionNumber = {refreshTarget.PartitionNumber}")
+					.Single();
+
+				UInt64 currentSizeBytes = Convert.ToUInt64(
+					bootPartition.CimInstanceProperties["Size"].Value);
+				String currentDriveLetter = Convert.ToString(
+					bootPartition.CimInstanceProperties["DriveLetter"].Value) ??
+					String.Empty;
+
+				if (currentSizeBytes != refreshTarget.SizeBytes ||
+					!String.Equals(
+						currentDriveLetter,
+						refreshTarget.DriveLetter,
+						StringComparison.OrdinalIgnoreCase))
+				{
+					throw new InvalidOperationException(
+						"The WinPE partition changed after refresh validation. No partition was formatted.");
+				}
+
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Formatting only the existing WinPE FAT32 partition. The BuildData partition will be preserved.",
+					50);
+
+				FormatPartition(
+					session,
+					bootPartition,
+					"FAT32",
+					"WinPE");
+
+				OnPhaseProgress(
+					DiskBuildPhase.DiskPreparation,
+					"Boot partition refresh preparation complete.",
+					100);
+				OnPhaseProgress(
+					DiskBuildPhase.CopyingBootMedia,
+					"Copying the new WinPE environment to the refreshed boot partition.",
+					0);
+
+				FSManager.CopyDirectory(
+					buildResult.MediaFolder,
+					$"{currentDriveLetter}:\\");
+
+				OnPhaseProgress(
+					DiskBuildPhase.CopyingBootMedia,
+					"WinPE environment copied. Existing BuildData content was preserved.",
+					100);
+				OnPhaseProgress(
+					DiskBuildPhase.Complete,
+					"USB boot partition refresh complete.",
+					100);
+			}
+			finally
+			{
+				TryDeleteDirectory(buildResult.WorkingFolder);
+			}
+		}
+
+		internal static UInt64 CalculateRefreshPayloadRequiredSize(
+			IReadOnlyList<Int64> fileLengths)
+		{
+			ArgumentNullException.ThrowIfNull(fileLengths);
+
+			if (fileLengths.Any(length => length < 0))
+			{
+				throw new ArgumentOutOfRangeException(
+					nameof(fileLengths),
+					"WinPE payload file lengths cannot be negative.");
+			}
+
+			if (fileLengths.Any(length => (UInt64)length > UInt32.MaxValue))
+			{
+				throw new InvalidOperationException(
+					"The WinPE payload contains a file larger than the FAT32 maximum of 4 GB minus one byte. No partition was formatted.");
+			}
+
+			UInt64 mediaSizeBytes = fileLengths
+				.Select(Convert.ToUInt64)
+				.Aggregate(0UL, (total, length) => checked(total + length));
+
+			return checked(mediaSizeBytes + 256UL * 1024 * 1024);
+		}
+
 		private async Task PrepareDisk(
 			Func<CancellationToken, Task<UInt32>> resolveDiskNumberAsync,
 			CancellationToken cancellationToken)

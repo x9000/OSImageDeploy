@@ -6,6 +6,9 @@ namespace OSImageDeploy.Contracts
 
 		public Boolean RebuildWinPeCache { get; init; }
 
+		public UsbMediaBuildMode BuildMode { get; init; } =
+			UsbMediaBuildMode.FullRebuild;
+
 		public IReadOnlyList<String> WinPeDriverPackageIds { get; init; } =
 			Array.Empty<String>();
 

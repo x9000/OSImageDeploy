@@ -8,6 +8,7 @@ service OsImageDeployControl {
 	rpc GetServiceStatus (GetServiceStatusRequest) returns (GetServiceStatusResponse);
 	rpc ListEligibleUsbTargets (ListEligibleUsbTargetsRequest) returns (ListEligibleUsbTargetsResponse);
 	rpc ValidateUsbTarget (ValidateUsbTargetRequest) returns (ValidateUsbTargetResponse);
+	rpc ValidateUsbMediaRefresh (ValidateUsbMediaRefreshRequest) returns (ValidateUsbMediaRefreshResponse);
 	rpc StartUsbMediaBuild (StartUsbMediaBuildRequest) returns (UsbMediaOperationUpdate);
 	rpc WatchUsbMediaBuild (UsbMediaOperationRequest) returns (stream UsbMediaOperationUpdate);
 	rpc GetUsbMediaBuildStatus (UsbMediaOperationRequest) returns (UsbMediaOperationUpdate);
@@ -69,6 +70,35 @@ message StartUsbMediaBuildRequest {
 	bool destructive_action_confirmed = 2;
 	bool rebuild_win_pe_cache = 3;
 	repeated string win_pe_driver_package_ids = 4;
+	UsbMediaBuildMode build_mode = 5;
+}
+
+enum UsbMediaBuildMode {
+	USB_MEDIA_BUILD_MODE_FULL_REBUILD = 0;
+	USB_MEDIA_BUILD_MODE_REFRESH_BOOT_PARTITION = 1;
+}
+
+message ValidateUsbMediaRefreshRequest {
+	UsbTarget selected_target = 1;
+}
+
+message ValidateUsbMediaRefreshResponse {
+	bool is_eligible = 1;
+	string summary = 2;
+	repeated string warnings = 3;
+	UsbTarget resolved_target = 4;
+	UsbMediaPartition boot_partition = 5;
+	UsbMediaPartition data_partition = 6;
+}
+
+message UsbMediaPartition {
+	uint32 partition_number = 1;
+	uint64 size_bytes = 2;
+	string file_system = 3;
+	string label = 4;
+	string drive_letter = 5;
+	bool has_driver_packs_folder = 6;
+	bool has_windows_images_folder = 7;
 }
 
 message ListWinPeDriverPackagesRequest {

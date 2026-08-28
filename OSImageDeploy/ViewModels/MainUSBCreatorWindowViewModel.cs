@@ -30,6 +30,9 @@ namespace ViewModels
 			CreateUSBCommand =
 				new RelayCommand<UsbTargetDescriptor>(
 					execute: CreateUSBClickHandler);
+			RefreshUSBMediaCommand =
+				new RelayCommand<UsbTargetDescriptor>(
+					execute: RefreshUSBMediaClickHandler);
 			CancelUSBCommand =
 				new RelayCommand(execute: CancelUSBClickHandler);
 			ExitCommand = new RelayCommand(execute: ExitCommandHandler, canExecute: ExitCanExecuteHandler);
@@ -85,6 +88,7 @@ namespace ViewModels
 		#region Commands
 
 		public RelayCommand<UsbTargetDescriptor> CreateUSBCommand { get; }
+		public RelayCommand<UsbTargetDescriptor> RefreshUSBMediaCommand { get; }
 		public RelayCommand CancelUSBCommand { get; }
 		public RelayCommand ExitCommand { get; }
 		public RelayCommand RefreshUSBButtonCommand { get; }
@@ -758,6 +762,23 @@ namespace ViewModels
 		private async void CreateUSBClickHandler(
 			UsbTargetDescriptor selectedTarget)
 		{
+			await StartUsbMediaOperationAsync(
+				selectedTarget,
+				UsbMediaBuildMode.FullRebuild);
+		}
+
+		private async void RefreshUSBMediaClickHandler(
+			UsbTargetDescriptor selectedTarget)
+		{
+			await StartUsbMediaOperationAsync(
+				selectedTarget,
+				UsbMediaBuildMode.RefreshBootPartition);
+		}
+
+		private async Task StartUsbMediaOperationAsync(
+			UsbTargetDescriptor selectedTarget,
+			UsbMediaBuildMode buildMode)
+		{
 			if (selectedTarget == null ||
 				String.IsNullOrWhiteSpace(selectedTarget.TargetId))
 			{
@@ -775,19 +796,92 @@ namespace ViewModels
 					selectedDriverPackages.Select(
 						package => package.Package.DisplayName));
 
+			UsbMediaRefreshValidationResult refreshValidation = null;
+
+			if (buildMode == UsbMediaBuildMode.RefreshBootPartition)
+			{
+				InfoTextBlockText =
+					"Checking whether the existing USB layout can be refreshed safely...";
+
+				try
+				{
+					refreshValidation =
+						await _serviceClient.ValidateUsbMediaRefreshAsync(
+							selectedTarget);
+				}
+				catch (Exception exception)
+				{
+					HandleUsbOperationFailure(
+						"USB refresh validation failed.",
+						exception,
+						statusMayBeLost: false);
+					return;
+				}
+
+				if (!refreshValidation.IsEligible ||
+					refreshValidation.BootPartition == null ||
+					refreshValidation.DataPartition == null)
+				{
+					InfoTextBlockText = "The selected USB cannot be refreshed in place.";
+					MessageBox.Show(
+						refreshValidation.Summary +
+						Environment.NewLine +
+						Environment.NewLine +
+						"No partition has been formatted. Use the full rebuild option if you want to recreate this disk.",
+						"USB Refresh Not Available",
+						MessageBoxButton.OK,
+						MessageBoxImage.Information);
+					return;
+				}
+			}
+
+			String confirmationMessage;
+			String confirmationTitle;
+
+			if (buildMode == UsbMediaBuildMode.RefreshBootPartition)
+			{
+				confirmationTitle = "Confirm USB Boot Partition Refresh";
+				confirmationMessage =
+					"Only the existing FAT32 WinPE boot partition on this device will be formatted:" +
+					Environment.NewLine +
+					Environment.NewLine +
+					selectedTarget.DisplayName +
+					Environment.NewLine +
+					$"WinPE partition: {refreshValidation.BootPartition.DriveLetter}: " +
+					$"({refreshValidation.BootPartition.SizeBytes / 1024D / 1024D / 1024D:F1} GB)" +
+					Environment.NewLine +
+					$"Preserved BuildData partition: {refreshValidation.DataPartition.DriveLetter}: " +
+					$"({refreshValidation.DataPartition.SizeBytes / 1024D / 1024D / 1024D:F1} GB)" +
+					Environment.NewLine +
+					driverPackageSummary +
+					Environment.NewLine +
+					Environment.NewLine +
+					"The service will rediscover the physical disk and revalidate this layout again immediately before formatting. " +
+					"The DriverPacks, WindowsImages and other files on BuildData will be left in place." +
+					Environment.NewLine +
+					Environment.NewLine +
+					"Continue with the boot partition refresh?";
+			}
+			else
+			{
+				confirmationTitle = "Confirm Destructive USB Operation";
+				confirmationMessage =
+					$"All existing data on the following device will be permanently erased:" +
+					Environment.NewLine +
+					Environment.NewLine +
+					selectedTarget.DisplayName +
+					Environment.NewLine +
+					$"Size: {selectedTarget.SizeBytes / 1024D / 1024D / 1024D:F1} GB" +
+					Environment.NewLine +
+					driverPackageSummary +
+					Environment.NewLine +
+					Environment.NewLine +
+					"Continue with USB creation?";
+			}
+
 			MessageBoxResult confirmation = MessageBox.Show(
-				$"All existing data on the following device will be permanently erased:" +
-				Environment.NewLine +
-				Environment.NewLine +
-				selectedTarget.DisplayName +
-				Environment.NewLine +
-				$"Size: {selectedTarget.SizeBytes / 1024D / 1024D / 1024D:F1} GB" +
-				Environment.NewLine +
-				driverPackageSummary +
-				Environment.NewLine +
-				Environment.NewLine +
-				"Continue with USB creation?",
-				"Confirm Destructive USB Operation",
+				confirmationMessage,
+				confirmationTitle,
 				MessageBoxButton.YesNo,
 				MessageBoxImage.Warning,
 				MessageBoxResult.No);
@@ -809,6 +903,7 @@ namespace ViewModels
 						new UsbMediaBuildRequest
 						{
 							Target = selectedTarget,
+							BuildMode = buildMode,
 							WinPeDriverPackageIds = selectedDriverPackages
 								.Select(package => package.Package.PackageId)
 								.ToList(),

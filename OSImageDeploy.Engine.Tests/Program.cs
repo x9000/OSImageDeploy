@@ -13,7 +13,11 @@ List<(String Name, Action Test)> tests = new()
 	("Unhealthy disk is rejected", UnhealthyDiskIsRejected),
 	("Changed size is rejected", ChangedSizeIsRejected),
 	("Missing target is rejected", MissingTargetIsRejected),
-	("Reassigned disk number is accepted with warning", ReassignedDiskNumberIsAccepted)
+	("Reassigned disk number is accepted with warning", ReassignedDiskNumberIsAccepted),
+	("Existing OSImageDeploy layout is refreshable", ExistingLayoutIsRefreshable),
+	("Refresh rejects a non-FAT32 boot partition", RefreshRejectsNonFatBootPartition),
+	("Refresh rejects missing preserved-data folders", RefreshRejectsMissingDataFolders),
+	("Refresh rejects unexpected extra partitions", RefreshRejectsExtraPartitions)
 };
 
 List<String> failures = new List<String>();
@@ -143,6 +147,72 @@ static void ReassignedDiskNumberIsAccepted()
 	Assert(
 		result.ResolvedTarget?.DiskNumber == 7,
 		"The service-resolved disk number was not returned.");
+}
+
+static void ExistingLayoutIsRefreshable()
+{
+	UsbMediaRefreshValidationResult result =
+		UsbMediaRefreshSafetyPolicy.Validate(CreateRefreshLayout());
+
+	Assert(result.IsEligible, result.Summary);
+	Assert(
+		result.BootPartition?.PartitionNumber == 1,
+		"The boot partition was not identified.");
+	Assert(
+		result.DataPartition?.PartitionNumber == 2,
+		"The preserved data partition was not identified.");
+}
+
+static void RefreshRejectsNonFatBootPartition()
+{
+	UsbMediaRefreshValidationResult result =
+		UsbMediaRefreshSafetyPolicy.Validate(
+			CreateRefreshLayout(bootFileSystem: "NTFS"));
+
+	Assert(!result.IsEligible, "A non-FAT32 boot partition was accepted.");
+	Assert(
+		result.Summary.Contains("not FAT32", StringComparison.OrdinalIgnoreCase),
+		"The boot filesystem rejection was not explained.");
+}
+
+static void RefreshRejectsMissingDataFolders()
+{
+	UsbMediaRefreshValidationResult result =
+		UsbMediaRefreshSafetyPolicy.Validate(
+			CreateRefreshLayout(hasDriverPacksFolder: false));
+
+	Assert(!result.IsEligible, "A data partition without DriverPacks was accepted.");
+	Assert(
+		result.Summary.Contains("DriverPacks", StringComparison.OrdinalIgnoreCase),
+		"The missing DriverPacks folder was not explained.");
+}
+
+static void RefreshRejectsExtraPartitions()
+{
+	UsbMediaLayoutDescriptor layout = CreateRefreshLayout();
+	UsbMediaRefreshValidationResult result =
+		UsbMediaRefreshSafetyPolicy.Validate(
+			new UsbMediaLayoutDescriptor
+			{
+				PartitionStyle = layout.PartitionStyle,
+				Partitions = layout.Partitions.Concat(
+					new[]
+					{
+						new UsbMediaPartitionDescriptor
+						{
+							PartitionNumber = 3,
+							SizeBytes = 1024 * 1024,
+							FileSystem = "NTFS",
+							Label = "Unexpected",
+							DriveLetter = "Z"
+						}
+					}).ToList()
+			});
+
+	Assert(!result.IsEligible, "A layout with an unexpected partition was accepted.");
+	Assert(
+		result.Summary.Contains("exactly", StringComparison.OrdinalIgnoreCase),
+		"The unexpected partition rejection was not explained.");
 }
 
 static Task UnconfirmedOperationIsRejected()
@@ -522,6 +592,38 @@ static UsbTargetDescriptor CreateTarget(
 		IsOffline = isOffline,
 		IsClustered = isClustered,
 		HealthStatus = healthStatus
+	};
+}
+
+static UsbMediaLayoutDescriptor CreateRefreshLayout(
+	String bootFileSystem = "FAT32",
+	Boolean hasDriverPacksFolder = true,
+	Boolean hasWindowsImagesFolder = true)
+{
+	return new UsbMediaLayoutDescriptor
+	{
+		PartitionStyle = "GPT",
+		Partitions = new[]
+		{
+			new UsbMediaPartitionDescriptor
+			{
+				PartitionNumber = 1,
+				SizeBytes = 4UL * 1024 * 1024 * 1024,
+				FileSystem = bootFileSystem,
+				Label = "WinPE",
+				DriveLetter = "E"
+			},
+			new UsbMediaPartitionDescriptor
+			{
+				PartitionNumber = 2,
+				SizeBytes = 60UL * 1024 * 1024 * 1024,
+				FileSystem = "NTFS",
+				Label = "BuildData",
+				DriveLetter = "F",
+				HasDriverPacksFolder = hasDriverPacksFolder,
+				HasWindowsImagesFolder = hasWindowsImagesFolder
+			}
+		}
 	};
 }
 

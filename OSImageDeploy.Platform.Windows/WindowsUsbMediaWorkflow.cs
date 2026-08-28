@@ -6,18 +6,21 @@ namespace OSImageDeploy.Platform.Windows
 {
 	public sealed class WindowsUsbMediaWorkflow :
 		IUsbMediaWorkflow,
+		IUsbMediaRefreshValidator,
 		IWinPeCacheService
 	{
 		private readonly WindowsUsbTargetProvider _targetProvider;
 		private readonly WinPeMediaCacheManager _cacheManager;
 		private readonly WindowsWinPeDriverPackageStore _driverPackageStore;
+		private readonly WindowsUsbMediaLayoutInspector _layoutInspector;
 		private readonly SemaphoreSlim _operationGate =
 			new SemaphoreSlim(1, 1);
 
 		public WindowsUsbMediaWorkflow(
 			WindowsUsbTargetProvider targetProvider,
 			WinPeMediaCacheManager cacheManager,
-			WindowsWinPeDriverPackageStore driverPackageStore)
+			WindowsWinPeDriverPackageStore driverPackageStore,
+			WindowsUsbMediaLayoutInspector layoutInspector)
 		{
 			_targetProvider = targetProvider ??
 				throw new ArgumentNullException(nameof(targetProvider));
@@ -25,6 +28,8 @@ namespace OSImageDeploy.Platform.Windows
 				throw new ArgumentNullException(nameof(cacheManager));
 			_driverPackageStore = driverPackageStore ??
 				throw new ArgumentNullException(nameof(driverPackageStore));
+			_layoutInspector = layoutInspector ??
+				throw new ArgumentNullException(nameof(layoutInspector));
 		}
 
 		public Task<IReadOnlyList<UsbTargetDescriptor>> GetEligibleTargetsAsync(
@@ -40,6 +45,44 @@ namespace OSImageDeploy.Platform.Windows
 			return _targetProvider.ValidateTargetAsync(
 				target,
 				cancellationToken);
+		}
+
+		public async Task<UsbMediaRefreshValidationResult> ValidateRefreshAsync(
+			UsbTargetDescriptor target,
+			CancellationToken cancellationToken = default)
+		{
+			UsbTargetValidationResult targetValidation =
+				await _targetProvider.ValidateTargetAsync(
+					target,
+					cancellationToken);
+
+			if (!targetValidation.IsValid ||
+				targetValidation.ResolvedTarget == null)
+			{
+				return new UsbMediaRefreshValidationResult
+				{
+					IsEligible = false,
+					Summary = targetValidation.Summary,
+					Warnings = targetValidation.Warnings
+				};
+			}
+
+			UsbMediaLayoutDescriptor layout = _layoutInspector.Inspect(
+				targetValidation.ResolvedTarget.DiskNumber);
+			UsbMediaRefreshValidationResult layoutValidation =
+				UsbMediaRefreshSafetyPolicy.Validate(layout);
+
+			return new UsbMediaRefreshValidationResult
+			{
+				IsEligible = layoutValidation.IsEligible,
+				Summary = layoutValidation.Summary,
+				Warnings = targetValidation.Warnings
+					.Concat(layoutValidation.Warnings)
+					.ToList(),
+				ResolvedTarget = targetValidation.ResolvedTarget,
+				BootPartition = layoutValidation.BootPartition,
+				DataPartition = layoutValidation.DataPartition
+			};
 		}
 
 		public async Task CreateUsbMediaAsync(
@@ -86,7 +129,48 @@ namespace OSImageDeploy.Platform.Windows
 
 				try
 				{
-					await diskBuilder.PrepareDiskAsync(
+					if (request.BuildMode == UsbMediaBuildMode.RefreshBootPartition)
+					{
+						await diskBuilder.RefreshBootPartitionAsync(
+							async token =>
+							{
+								progress.Report(
+									new OperationProgress
+									{
+										Stage = "Validating Refresh Layout",
+										Message =
+											"Rediscovering the selected USB disk and revalidating both partitions immediately before formatting the WinPE partition.",
+										OverallPercent = 1
+									});
+
+								UsbMediaRefreshValidationResult validation =
+									await ValidateRefreshAsync(
+										request.Target,
+										token);
+
+								if (!validation.IsEligible ||
+									validation.ResolvedTarget == null ||
+									validation.BootPartition == null)
+								{
+									throw new InvalidOperationException(
+										validation.Summary);
+								}
+
+								return new UsbBootPartitionRefreshTarget
+								{
+									DiskNumber =
+										validation.ResolvedTarget.DiskNumber,
+									PartitionNumber =
+										validation.BootPartition.PartitionNumber,
+									SizeBytes = validation.BootPartition.SizeBytes,
+									DriveLetter = validation.BootPartition.DriveLetter
+								};
+							},
+							cancellationToken);
+					}
+					else
+					{
+						await diskBuilder.PrepareDiskAsync(
 						async token =>
 						{
 							progress.Report(
@@ -112,7 +196,8 @@ namespace OSImageDeploy.Platform.Windows
 
 							return validation.ResolvedTarget.DiskNumber;
 						},
-						cancellationToken);
+							cancellationToken);
+					}
 				}
 				finally
 				{

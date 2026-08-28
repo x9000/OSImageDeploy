@@ -50,6 +50,62 @@ Assert(roundTrip.HealthStatus == original.HealthStatus, "HealthStatus changed.")
 
 Console.WriteLine("PASS: USB target gRPC contract round trip.");
 
+StartUsbMediaBuildRequest refreshBuildMessage =
+	new StartUsbMediaBuildRequest
+	{
+		SelectedTarget = GrpcTargetMapper.ToMessage(original),
+		DestructiveActionConfirmed = true,
+		BuildMode =
+			OSImageDeploy.Transport.Grpc.V1.UsbMediaBuildMode.RefreshBootPartition
+	};
+StartUsbMediaBuildRequest refreshBuildRoundTrip =
+	StartUsbMediaBuildRequest.Parser.ParseFrom(
+		refreshBuildMessage.ToByteArray());
+Assert(
+	refreshBuildRoundTrip.BuildMode ==
+		OSImageDeploy.Transport.Grpc.V1.UsbMediaBuildMode.RefreshBootPartition,
+	"USB refresh build mode changed across the gRPC contract.");
+
+ValidateUsbMediaRefreshResponse refreshValidationMessage =
+	new ValidateUsbMediaRefreshResponse
+	{
+		IsEligible = true,
+		Summary = "Refresh layout is valid.",
+		ResolvedTarget = GrpcTargetMapper.ToMessage(original),
+		BootPartition = new UsbMediaPartition
+		{
+			PartitionNumber = 1,
+			SizeBytes = 4UL * 1024 * 1024 * 1024,
+			FileSystem = "FAT32",
+			Label = "WinPE",
+			DriveLetter = "E"
+		},
+		DataPartition = new UsbMediaPartition
+		{
+			PartitionNumber = 2,
+			SizeBytes = 120UL * 1024 * 1024 * 1024,
+			FileSystem = "NTFS",
+			Label = "BuildData",
+			DriveLetter = "F",
+			HasDriverPacksFolder = true,
+			HasWindowsImagesFolder = true
+		}
+	};
+ValidateUsbMediaRefreshResponse refreshValidationRoundTrip =
+	ValidateUsbMediaRefreshResponse.Parser.ParseFrom(
+		refreshValidationMessage.ToByteArray());
+Assert(
+	refreshValidationRoundTrip.IsEligible,
+	"USB refresh eligibility changed across the gRPC contract.");
+Assert(
+	refreshValidationRoundTrip.BootPartition.FileSystem == "FAT32",
+	"USB refresh boot partition changed across the gRPC contract.");
+Assert(
+	refreshValidationRoundTrip.DataPartition.HasWindowsImagesFolder,
+	"USB refresh preserved-data folders changed across the gRPC contract.");
+
+Console.WriteLine("PASS: USB refresh gRPC contract round trip.");
+
 String appliedDriverPackTestDirectory = Path.Combine(
 	Path.GetTempPath(),
 	"OSImageDeploy.AppliedDriverPack.Tests",
@@ -300,6 +356,65 @@ Assert(
 
 Console.WriteLine("PASS: WinPE preflight precedes destructive target resolution.");
 
+targetResolverCalled = false;
+preflightFailureObserved = false;
+
+try
+{
+	await preflightDiskBuilder.RefreshBootPartitionAsync(
+		_ =>
+		{
+			targetResolverCalled = true;
+			return Task.FromResult(
+				new UsbBootPartitionRefreshTarget
+				{
+					DiskNumber = 1,
+					PartitionNumber = 1,
+					SizeBytes = 4UL * 1024 * 1024 * 1024,
+					DriveLetter = "E"
+				});
+		});
+}
+catch (InvalidOperationException exception) when (
+	exception.Message == "Expected preflight failure.")
+{
+	preflightFailureObserved = true;
+}
+
+Assert(
+	preflightFailureObserved,
+	"The injected refresh preflight failure was not observed.");
+Assert(
+	!targetResolverCalled,
+	"The refresh target resolver ran before WinPE preflight completed.");
+
+Console.WriteLine("PASS: WinPE refresh preflight precedes partition validation.");
+
+UInt64 refreshPayloadRequirement =
+	DiskBuilder.CalculateRefreshPayloadRequiredSize(
+		new Int64[] { 1024, 2048 });
+Assert(
+	refreshPayloadRequirement == 256UL * 1024 * 1024 + 3072,
+	"The USB refresh payload margin was not calculated correctly.");
+
+Boolean fat32FileLimitRejected = false;
+
+try
+{
+	DiskBuilder.CalculateRefreshPayloadRequiredSize(
+		new Int64[] { (Int64)UInt32.MaxValue + 1 });
+}
+catch (InvalidOperationException)
+{
+	fat32FileLimitRejected = true;
+}
+
+Assert(
+	fat32FileLimitRejected,
+	"A USB refresh payload containing a file above the FAT32 limit was accepted.");
+
+Console.WriteLine("PASS: USB refresh payload capacity guards.");
+
 String cacheTestDirectory = Path.Combine(
 	Path.GetTempPath(),
 	$"OSImageDeploy-cache-test-{Guid.NewGuid():N}");
@@ -313,7 +428,8 @@ try
 			new WindowsUsbTargetProvider(),
 			cacheManager,
 			new WindowsWinPeDriverPackageStore(
-				Path.Combine(cacheTestDirectory, "driver-packages")));
+				Path.Combine(cacheTestDirectory, "driver-packages")),
+			new WindowsUsbMediaLayoutInspector());
 
 	WinPeCacheStatusSnapshot missingStatus =
 		await workflow.GetStatusAsync();
@@ -718,7 +834,33 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 	Console.WriteLine(
 		$"PASS: Live USB target enumeration ({eligibleTargets.Targets.Count} eligible target(s)).");
 
-	Boolean unconfirmedRequestRejected = false;
+	Int32 refreshEligibleTargetCount = 0;
+
+	foreach (UsbTarget target in eligibleTargets.Targets)
+	{
+		ValidateUsbMediaRefreshResponse refreshValidation =
+			await client.ValidateUsbMediaRefreshAsync(
+				new ValidateUsbMediaRefreshRequest
+				{
+					SelectedTarget = target
+				},
+				deadline: DateTime.UtcNow.AddSeconds(10));
+
+		if (refreshValidation.IsEligible)
+		{
+			refreshEligibleTargetCount++;
+			Assert(
+				refreshValidation.BootPartition != null &&
+				refreshValidation.DataPartition != null,
+				"The service reported refresh eligibility without both partition descriptors.");
+		}
+	}
+
+	Console.WriteLine(
+		$"PASS: Live read-only USB refresh validation ({refreshEligibleTargetCount} refreshable target(s)).");
+
+	Boolean unconfirmedFullBuildRejected = false;
+	Boolean unconfirmedRefreshRejected = false;
 
 	try
 	{
@@ -726,21 +868,45 @@ if (args.Contains("--live", StringComparer.OrdinalIgnoreCase))
 			new StartUsbMediaBuildRequest
 			{
 				SelectedTarget = GrpcTargetMapper.ToMessage(original),
-				DestructiveActionConfirmed = false
+				DestructiveActionConfirmed = false,
+				BuildMode =
+					OSImageDeploy.Transport.Grpc.V1.UsbMediaBuildMode.FullRebuild
 			},
 			deadline: DateTime.UtcNow.AddSeconds(10));
 	}
 	catch (RpcException exception) when (
 		exception.StatusCode == StatusCode.InvalidArgument)
 	{
-		unconfirmedRequestRejected = true;
+		unconfirmedFullBuildRejected = true;
 	}
 
 	Assert(
-		unconfirmedRequestRejected,
-		"The service accepted an unconfirmed destructive request.");
+		unconfirmedFullBuildRejected,
+		"The service accepted an unconfirmed full rebuild request.");
 
-	Console.WriteLine("PASS: Live destructive-operation confirmation guard.");
+	try
+	{
+		await client.StartUsbMediaBuildAsync(
+			new StartUsbMediaBuildRequest
+			{
+				SelectedTarget = GrpcTargetMapper.ToMessage(original),
+				DestructiveActionConfirmed = false,
+				BuildMode =
+					OSImageDeploy.Transport.Grpc.V1.UsbMediaBuildMode.RefreshBootPartition
+			},
+			deadline: DateTime.UtcNow.AddSeconds(10));
+	}
+	catch (RpcException exception) when (
+		exception.StatusCode == StatusCode.InvalidArgument)
+	{
+		unconfirmedRefreshRejected = true;
+	}
+
+	Assert(
+		unconfirmedRefreshRejected,
+		"The service accepted an unconfirmed boot-partition refresh request.");
+
+	Console.WriteLine("PASS: Live full-rebuild and refresh confirmation guards.");
 
 	GetActiveUsbMediaBuildResponse activeOperation =
 		await client.GetActiveUsbMediaBuildAsync(
