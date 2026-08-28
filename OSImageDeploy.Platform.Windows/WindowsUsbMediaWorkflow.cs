@@ -163,7 +163,10 @@ namespace OSImageDeploy.Platform.Windows
 									PartitionNumber =
 										validation.BootPartition.PartitionNumber,
 									SizeBytes = validation.BootPartition.SizeBytes,
-									DriveLetter = validation.BootPartition.DriveLetter
+									DriveLetter = validation.BootPartition.DriveLetter,
+									DataDriveLetter =
+										validation.DataPartition?.DriveLetter ??
+										String.Empty
 								};
 							},
 							cancellationToken);
