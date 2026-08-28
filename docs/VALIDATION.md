@@ -5,6 +5,80 @@ the automated test suite. Each result applies only to the identified artifact,
 hardware, and configuration; it is not a claim of compatibility with every
 device or peripheral.
 
+## 2026-08-28 — 1.97.1405 NVMe USB refresh validation
+
+### Candidate identity
+
+- Commit: `7fd6afec1bfb3343c0245e25ee3389f02cecd3d3` (`main`)
+- Installer: `OSImageDeploySuite.msi`
+- Installer size: 163,438,592 bytes
+- Installer SHA-256:
+  `6136B8826BB108A517216FE12F53A15A78C84F7AB80ABDB0BA8D2604484098CB`
+- Authenticode status: Valid, with a Sectigo RFC 3161 timestamp
+- Signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`
+
+### Fixed-media Microsoft Reserved partition diagnosis
+
+The target was Disk 2, `WDC  WDS 100T1R0B-68A`, an NVMe device in a USB
+enclosure. Windows reported it as a healthy, online, writable
+1,000,204,886,016-byte USB disk and as neither the system disk nor the boot
+disk. Its stable raw identity was:
+
+`USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\01293800008D&0:KEPLER`
+
+Windows presented this enclosure as fixed media and automatically added a
+hidden 16,759,808-byte Microsoft Reserved partition when the application
+created its GPT layout. The application had not created an unwanted third data
+partition; its former exactly-two-partition rule was rejecting this normal
+Windows-managed MSR on every subsequent refresh attempt.
+
+The refresh policy now permits at most one standard GPT MSR before the WinPE
+partition. It must be hidden, no larger than 128 MiB, and have no drive letter,
+label, or file system. Ordinary extra partitions, malformed MSRs, multiple
+MSRs, and an MSR in any other position remain ineligible.
+
+### Automated, signed, and installed-product validation
+
+- The canonical unsigned Release build and WiX package completed with zero
+  warnings and errors, and the Engine suite passed all 26 tests.
+- The service, contract, platform, installer-structure, signature, and
+  Microsoft MsiVal2 checks passed; MsiVal2 reported no findings.
+- GitHub CI passed for pull request 30 before it was merged.
+- The signed MSI installed successfully. Installed Apps reported `1.97.1405`.
+- `OSImageDeploy.Service` was Running, Automatic, and LocalSystem with its
+  expected recovery configuration, and all installed project-owned payloads
+  retained valid timestamped signatures.
+- From Medium integrity, live named-pipe, driver-package catalog, USB
+  enumeration, operation-status, WinPE-cache, and destructive confirmation
+  guard checks passed. The installed validator found one eligible and one
+  refreshable USB target.
+
+### Installed destructive boot-partition refresh
+
+Immediately before the operation, Disk 2 was rediscovered and checked against
+its exact model, raw identity, size, bus, health, and system/boot/read-only/
+offline flags. The service then rediscovered and revalidated its stable target
+identity before accepting an explicitly confirmed boot-partition refresh.
+
+The installed service used the available `dell-winpe` and `hp-winpe` packages
+and completed operation `1b7a09ebe95a40baa93f77c5573a4713` successfully. Only
+the FAT32 WinPE partition was refreshed. Post-operation inspection confirmed:
+
+- partition 1 remained the hidden 16,759,808-byte standard GPT MSR;
+- partition 2 remained the 4,294,967,296-byte FAT32 `WINPE` volume;
+- partition 3 remained the 995,892,396,032-byte NTFS `BuildData` volume;
+- `bootmgr`, `EFI\Boot\bootx64.efi`, and `sources\boot.wim` were present;
+- the `DriverPacks` and `WindowsImages` directories remained on `BuildData`;
+- a preservation sentinel on `BuildData` had SHA-256
+  `E8F9F34300851E0B81506EA3EEC6FFD705388503FFE8D69F1208E52981094FEA`
+  both before and after the refresh.
+
+The complete installed-product and live-service validation passed again after
+the operation. This is installed-product destructive refresh validation on the
+identified NVMe-in-USB device. This exact `1.97.1405` artifact has not yet been
+credited with VMware Workstation or physical-hardware boot validation.
+
 ## 2026-08-28 — 1.97.1220 signed installed-product validation
 
 ### Candidate identity
