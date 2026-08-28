@@ -224,11 +224,20 @@
 
                     <Border Style="{StaticResource CardStyle}" Margin="0,18,0,0">
                         <StackPanel>
-                            <TextBlock Text="2. Create deployment media" Style="{StaticResource SectionTitleStyle}"/>
-                            <TextBlock Text="Creation is destructive. You will see the exact physical disk and selected driver packages again before anything is erased."
+                            <TextBlock Text="2. Create or refresh deployment media" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="A refresh formats only a compatible WinPE boot partition and preserves BuildData. A full rebuild erases the entire selected disk. Both operations revalidate the physical target before formatting."
                                        Style="{StaticResource HelpTextStyle}" Margin="0,6,0,16"/>
+                            <Button IsEnabled="{Binding CreateUSBButtonEnabled}"
+                                    Command="{Binding RefreshUSBMediaCommand, Mode=OneWay}"
+                                    CommandParameter="{Binding SelectedItem, ElementName=USBListComboBox}">
+                                <StackPanel>
+                                    <TextBlock Text="Refresh boot partition" TextAlignment="Center"/>
+                                    <TextBlock Text="Preserves the BuildData partition" FontSize="11" FontWeight="Normal" TextAlignment="Center" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Button>
                             <Button x:Name="CreateUSBButton"
                                     Style="{StaticResource DangerButtonStyle}"
+                                    Margin="0,10,0,0"
                                     IsEnabled="{Binding CreateUSBButtonEnabled}"
                                     Command="{Binding CreateUSBCommand, Mode=OneWay}"
                                     CommandParameter="{Binding SelectedItem, ElementName=USBListComboBox}">

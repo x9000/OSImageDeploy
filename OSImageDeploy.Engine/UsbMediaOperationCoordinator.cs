@@ -206,13 +206,20 @@ namespace OSImageDeploy.Engine
 		{
 			try
 			{
+				UsbMediaBuildRequest request = operation.Request ??
+					throw new InvalidOperationException(
+						"The USB media operation request is unavailable.");
+				Boolean isRefresh = request.BuildMode ==
+					UsbMediaBuildMode.RefreshBootPartition;
 				AppendSnapshot(
 					operation,
 					UsbMediaOperationState.Running,
 					new OperationProgress
 					{
 						Stage = "Starting",
-						Message = "Starting USB media creation.",
+						Message = isRefresh
+							? "Starting USB boot partition refresh."
+							: "Starting USB media creation.",
 						OverallPercent = 0
 					});
 
@@ -227,7 +234,7 @@ namespace OSImageDeploy.Engine
 							update));
 
 				await _workflow.CreateUsbMediaAsync(
-					operation.Request!,
+					request,
 					progress,
 					operation.Cancellation.Token);
 
@@ -237,7 +244,9 @@ namespace OSImageDeploy.Engine
 					new OperationProgress
 					{
 						Stage = "Complete",
-						Message = "USB media creation completed.",
+						Message = isRefresh
+							? "USB boot partition refresh completed. BuildData was preserved."
+							: "USB media creation completed.",
 						OverallPercent = 100
 					});
 			}

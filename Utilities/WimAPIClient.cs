@@ -111,6 +111,23 @@ namespace Imaging
 
 		public Task AddDriverPacksToAppliedWindowsAsync(String windowsPartitionRoot = @"W:\", CancellationToken cancellationToken = default)
 		{
+			DriverPackSelection selection =
+				DriverPackHelper.DiscoverDriverPacksOnMountedDrives(
+					message => Log(WimLogLevel.Information, message));
+
+			return AddDriverPacksToAppliedWindowsAsync(
+				selection.DriverPackPaths,
+				windowsPartitionRoot,
+				cancellationToken);
+		}
+
+		public Task AddDriverPacksToAppliedWindowsAsync(
+			IReadOnlyList<String> driverPacks,
+			String windowsPartitionRoot = @"W:\",
+			CancellationToken cancellationToken = default)
+		{
+			ArgumentNullException.ThrowIfNull(driverPacks);
+
 			return ExecuteAsync("Install driver packs", delegate
 			{
 				cancellationToken.ThrowIfCancellationRequested();
@@ -118,66 +135,83 @@ namespace Imaging
 				String windowsRoot = windowsPartitionRoot.TrimEnd('\\') + @"\";
 				String windowsTemp = Path.Combine(windowsRoot, @"Windows\Temp");
 
-				foreach (DriveInfo drive in DriveInfo.GetDrives())
+				if (driverPacks.Count == 0)
 				{
-					if (!drive.IsReady || drive.DriveType != DriveType.Fixed && drive.DriveType != DriveType.Removable)
+					Log(WimLogLevel.Warning, "No matching driver pack was selected. Driver installation was skipped.");
+					return;
+				}
+
+				Int32 total = driverPacks.Count;
+				Int32 index = 0;
+
+				foreach (String driverPack in driverPacks)
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+
+					if (!File.Exists(driverPack))
 					{
-						continue;
+						throw new FileNotFoundException(
+							"The driver pack selected during preflight is no longer available.",
+							driverPack);
 					}
 
-					String driverPacksRoot = Path.Combine(drive.RootDirectory.FullName, "DriverPacks");
+					index++;
 
-					if (!Directory.Exists(driverPacksRoot))
+					String driverFileName = Path.GetFileNameWithoutExtension(driverPack);
+					String extractionPath = Path.Combine(windowsTemp, driverFileName);
+					OnProgressChanged(
+						$"Preparing driver pack {index} of {total}: {driverFileName}",
+						ProgressSource.ManagedCode,
+						0,
+						0,
+						1);
+
+					try
 					{
-						continue;
-					}
+						Log(WimLogLevel.Information, "Decompressing Driver Pack: " + driverPack);
 
-					Log(WimLogLevel.Information, "DriverPacks folder found: " + driverPacksRoot);
-
-					String[] driverPacks = DriverPackHelper.GetValidDriverPacks(driverPacksRoot, delegate (String message)
-					{
-						Log(WimLogLevel.Information, message);
-					});
-
-					Int32 total = driverPacks.Length;
-					Int32 index = 0;
-
-					foreach (String driverPack in driverPacks)
-					{
-						cancellationToken.ThrowIfCancellationRequested();
-
-						index++;
-
-						String driverFileName = Path.GetFileNameWithoutExtension(driverPack);
-						String extractionPath = Path.Combine(windowsTemp, driverFileName);
-						OnProgressChanged($"Extracting Driver Pack ({driverFileName})", ProgressSource.ManagedCode, 0, index - 1, total);
-
-						try
+						if (Directory.Exists(extractionPath))
 						{
-							Log(WimLogLevel.Information, "Decompressing Driver Pack: " + driverPack);
-
-							if (Directory.Exists(extractionPath))
-							{
-								Directory.Delete(extractionPath, true);
-							}
-
-							Directory.CreateDirectory(extractionPath);
-
-							ZipFile.ExtractToDirectory(driverPack, extractionPath);
-
-							Log(WimLogLevel.Information, "Importing Driver Pack to Windows: " + driverFileName);
-
-							AddDriversToAppliedWindows(windowsRoot, extractionPath, true, false);
-
-							OnProgressChanged("Install Driver Pack: " + driverFileName, ProgressSource.ManagedCode, 0, index, total);
+							Directory.Delete(extractionPath, true);
 						}
-						finally
+
+						Directory.CreateDirectory(extractionPath);
+
+						Utilities.DiskBuilder.ExtractDriverArchives(
+							new[] { driverPack },
+							extractionPath,
+							(completed, fileTotal, archiveName) =>
+								OnProgressChanged(
+									$"Extracting {driverFileName}",
+									ProgressSource.ManagedCode,
+									0,
+									completed,
+									fileTotal),
+							cancellationToken);
+
+						Log(WimLogLevel.Information, "Importing Driver Pack to Windows: " + driverFileName);
+
+						AddDriversToAppliedWindows(
+							windowsRoot,
+							extractionPath,
+							true,
+							false,
+							driverFileName,
+							cancellationToken);
+
+						OnProgressChanged(
+							"Installed Driver Pack: " + driverFileName,
+							ProgressSource.ManagedCode,
+							0,
+							index,
+							total);
+					}
+					finally
+					{
+						if (Directory.Exists(extractionPath))
 						{
-							//if (Directory.Exists(extractionPath))
-							//{
-							//	Log(WimLogLevel.Information, "Removing Expanded Driver Pack: " + extractionPath);
-							//	Directory.Delete(extractionPath, true);
-							//}
+							Log(WimLogLevel.Information, "Removing expanded Driver Pack: " + extractionPath);
+							Directory.Delete(extractionPath, true);
 						}
 					}
 				}
@@ -243,7 +277,13 @@ namespace Imaging
 			}, cancellationToken);
 		}
 
-		private void AddDriversToAppliedWindows(String windowsRoot, String driverFolder, Boolean recurse, Boolean forceUnsigned)
+		private void AddDriversToAppliedWindows(
+			String windowsRoot,
+			String driverFolder,
+			Boolean recurse,
+			Boolean forceUnsigned,
+			String driverPackName,
+			CancellationToken cancellationToken)
 		{
 			IntPtr session;
 			Int32 hr = DismNative.DismOpenSession(windowsRoot, null, null, out session);
@@ -263,12 +303,13 @@ namespace Imaging
 
 				foreach (String infFile in infFiles)
 				{
+					cancellationToken.ThrowIfCancellationRequested();
 					index++;
 
 					Log(WimLogLevel.Information, "Adding driver: " + infFile);
 
 					OnProgressChanged(
-						"Add Windows Driver",
+						$"Installing {driverPackName}: driver {index} of {total} ({Path.GetFileName(infFile)})",
 						ProgressSource.DismApi,
 						0,
 						index,

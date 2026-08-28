@@ -47,7 +47,10 @@ builder.Services.AddSingleton<IUsbTargetDiscovery>(services =>
 builder.Services.AddSingleton<IUsbTargetValidator>(services =>
 	services.GetRequiredService<WindowsUsbTargetProvider>());
 builder.Services.AddSingleton<WindowsUsbMediaWorkflow>();
+builder.Services.AddSingleton<WindowsUsbMediaLayoutInspector>();
 builder.Services.AddSingleton<IUsbMediaWorkflow>(services =>
+	services.GetRequiredService<WindowsUsbMediaWorkflow>());
+builder.Services.AddSingleton<IUsbMediaRefreshValidator>(services =>
 	services.GetRequiredService<WindowsUsbMediaWorkflow>());
 builder.Services.AddSingleton<WinPeMediaCacheManager>();
 builder.Services.AddSingleton<WindowsWinPeDriverPackageStore>();

@@ -5,6 +5,8 @@ using OSImageDeploy.Platform.Windows;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
 using System.Reflection;
+using ContractUsbMediaBuildMode = OSImageDeploy.Contracts.UsbMediaBuildMode;
+using GrpcUsbMediaBuildMode = OSImageDeploy.Transport.Grpc.V1.UsbMediaBuildMode;
 
 namespace OSImageDeploy.Service.Services
 {
@@ -13,6 +15,7 @@ namespace OSImageDeploy.Service.Services
 	{
 		private readonly IUsbTargetDiscovery _targetDiscovery;
 		private readonly IUsbTargetValidator _targetValidator;
+		private readonly IUsbMediaRefreshValidator _refreshValidator;
 		private readonly IUsbMediaOperationCoordinator _operationCoordinator;
 		private readonly IWinPeCacheService _winPeCacheService;
 		private readonly WindowsWinPeDriverPackageStore _driverPackageStore;
@@ -21,6 +24,7 @@ namespace OSImageDeploy.Service.Services
 		public OsImageDeployControlService(
 			IUsbTargetDiscovery targetDiscovery,
 			IUsbTargetValidator targetValidator,
+			IUsbMediaRefreshValidator refreshValidator,
 			IUsbMediaOperationCoordinator operationCoordinator,
 			IWinPeCacheService winPeCacheService,
 			WindowsWinPeDriverPackageStore driverPackageStore,
@@ -28,6 +32,7 @@ namespace OSImageDeploy.Service.Services
 		{
 			_targetDiscovery = targetDiscovery;
 			_targetValidator = targetValidator;
+			_refreshValidator = refreshValidator;
 			_operationCoordinator = operationCoordinator;
 			_winPeCacheService = winPeCacheService;
 			_driverPackageStore = driverPackageStore;
@@ -182,6 +187,17 @@ namespace OSImageDeploy.Service.Services
 
 			UsbTargetDescriptor selectedTarget =
 				GrpcTargetMapper.ToDescriptor(request.SelectedTarget);
+			ContractUsbMediaBuildMode buildMode = request.BuildMode switch
+			{
+				GrpcUsbMediaBuildMode.FullRebuild =>
+					ContractUsbMediaBuildMode.FullRebuild,
+				GrpcUsbMediaBuildMode.RefreshBootPartition =>
+					ContractUsbMediaBuildMode.RefreshBootPartition,
+				_ => throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						"The requested USB media build mode is not supported."))
+			};
 
 			UsbTargetValidationResult validation =
 				await _targetValidator.ValidateTargetAsync(
@@ -194,6 +210,22 @@ namespace OSImageDeploy.Service.Services
 					new Status(
 						StatusCode.FailedPrecondition,
 						validation.Summary));
+			}
+
+			if (buildMode == ContractUsbMediaBuildMode.RefreshBootPartition)
+			{
+				UsbMediaRefreshValidationResult refreshValidation =
+					await _refreshValidator.ValidateRefreshAsync(
+						selectedTarget,
+						context.CancellationToken);
+
+				if (!refreshValidation.IsEligible)
+				{
+					throw new RpcException(
+						new Status(
+							StatusCode.FailedPrecondition,
+							refreshValidation.Summary));
+				}
 			}
 
 			context.CancellationToken.ThrowIfCancellationRequested();
@@ -210,6 +242,7 @@ namespace OSImageDeploy.Service.Services
 						{
 							Target = selectedTarget,
 							RebuildWinPeCache = request.RebuildWinPeCache,
+							BuildMode = buildMode,
 							WinPeDriverPackageIds = driverPackages
 								.Select(package => package.Descriptor.PackageId)
 								.ToList(),
@@ -217,8 +250,9 @@ namespace OSImageDeploy.Service.Services
 						});
 
 				_logger.LogWarning(
-					"USB media operation {OperationId} was authorised for target {TargetId}, selected as disk {DiskNumber}.",
+					"USB media operation {OperationId} ({BuildMode}) was authorised for target {TargetId}, selected as disk {DiskNumber}.",
 					operation.OperationId,
+					buildMode,
 					selectedTarget.TargetId,
 					selectedTarget.DiskNumber);
 
@@ -246,6 +280,72 @@ namespace OSImageDeploy.Service.Services
 					new Status(
 						StatusCode.FailedPrecondition,
 						exception.Message));
+			}
+		}
+
+		public override async Task<ValidateUsbMediaRefreshResponse>
+			ValidateUsbMediaRefresh(
+				ValidateUsbMediaRefreshRequest request,
+				ServerCallContext context)
+		{
+			if (request.SelectedTarget == null ||
+				String.IsNullOrWhiteSpace(request.SelectedTarget.TargetId))
+			{
+				throw new RpcException(
+					new Status(
+						StatusCode.InvalidArgument,
+						"A selected USB target identity is required."));
+			}
+
+			try
+			{
+				UsbMediaRefreshValidationResult validation =
+					await _refreshValidator.ValidateRefreshAsync(
+						GrpcTargetMapper.ToDescriptor(request.SelectedTarget),
+						context.CancellationToken);
+				ValidateUsbMediaRefreshResponse response =
+					new ValidateUsbMediaRefreshResponse
+					{
+						IsEligible = validation.IsEligible,
+						Summary = validation.Summary
+					};
+
+				response.Warnings.AddRange(validation.Warnings);
+
+				if (validation.ResolvedTarget != null)
+				{
+					response.ResolvedTarget =
+						GrpcTargetMapper.ToMessage(validation.ResolvedTarget);
+				}
+
+				if (validation.BootPartition != null)
+				{
+					response.BootPartition =
+						ToMessage(validation.BootPartition);
+				}
+
+				if (validation.DataPartition != null)
+				{
+					response.DataPartition =
+						ToMessage(validation.DataPartition);
+				}
+
+				return response;
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (Exception exception) when (exception is not RpcException)
+			{
+				_logger.LogError(
+					exception,
+					"USB media refresh validation failed.");
+
+				throw new RpcException(
+					new Status(
+						StatusCode.Internal,
+						"USB media refresh validation failed."));
 			}
 		}
 
@@ -558,6 +658,21 @@ namespace OSImageDeploy.Service.Services
 				throw new RpcException(
 					new Status(StatusCode.NotFound, exception.Message));
 			}
+		}
+
+		private static UsbMediaPartition ToMessage(
+			UsbMediaPartitionDescriptor partition)
+		{
+			return new UsbMediaPartition
+			{
+				PartitionNumber = partition.PartitionNumber,
+				SizeBytes = partition.SizeBytes,
+				FileSystem = partition.FileSystem,
+				Label = partition.Label,
+				DriveLetter = partition.DriveLetter,
+				HasDriverPacksFolder = partition.HasDriverPacksFolder,
+				HasWindowsImagesFolder = partition.HasWindowsImagesFolder
+			};
 		}
 
 		private async Task AuditOperationCompletionAsync(String operationId)

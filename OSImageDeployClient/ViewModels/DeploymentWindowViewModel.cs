@@ -7,7 +7,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using x9000.Utilities;
 using static x9000.Utilities.FSManager;
@@ -22,8 +21,12 @@ namespace ViewModels
 		private String _progressText;
 		private Int32 _overallProgress;
 		private Int32 _stageProgress;
+		private Boolean _isStageProgressIndeterminate;
+		private String _driverPackStatus;
+		private String _driverPackDetails;
 		#region "Relay Commands"
 		public RelayCommand StartRestoreCommand { get; }
+		public RelayCommand RefreshDriverPacksCommand { get; }
 		public RelayCommand CancelCommand { get; }
 		public RelayCommand CommandLineCommand { get; }
 		public RelayCommand WindowLoadedCommand { get; }
@@ -40,6 +43,7 @@ namespace ViewModels
 			_applyImageCancellationTokenSource = new CancellationTokenSource();
 
 			StartRestoreCommand = new RelayCommand(execute: StartRestoreClickHandler);
+			RefreshDriverPacksCommand = new RelayCommand(execute: RefreshDriverPacksClickHandler);
 			CancelCommand = new RelayCommand(execute: CancelClickHandler);
 			CommandLineCommand = new RelayCommand(execute: CommandLineClickHandler);
 			WindowLoadedCommand = new RelayCommand(execute: WindowLoadedCommandHandler);
@@ -49,6 +53,8 @@ namespace ViewModels
 			RestoreEnabled = true;
 			StatusMessage = "Ready to restore Windows image.";
 			CurrentStage = "Waiting";
+			DriverPackStatus = "Driver-pack preflight has not run.";
+			DriverPackDetails = "Select Refresh driver packs to scan attached deployment media.";
 		}
 
 
@@ -157,6 +163,33 @@ namespace ViewModels
 			}
 			else
 			{
+				DriverPackSelection driverPackSelection;
+
+				try
+				{
+					driverPackSelection = await RefreshDriverPackSelectionAsync();
+				}
+				catch (Exception ex)
+				{
+					AddLog("ERROR", "Driver-pack preflight failed: " + ex.Message, 0);
+					MessageBox.Show(
+						Application.Current.MainWindow,
+						"The driver-pack preflight could not be completed. No changes have been made to the target disk.\n\n" +
+							ex.Message,
+						"Driver-pack preflight failed",
+						MessageBoxButton.OK,
+						MessageBoxImage.Error);
+					return;
+				}
+
+				if (!ConfirmDriverPackSelection(driverPackSelection))
+				{
+					StatusMessage = "Restore cancelled before target-disk preparation.";
+					CurrentStage = "Waiting";
+					ProgressText = "Add or replace driver packs, then refresh the preflight before trying again.";
+					return;
+				}
+
 				RestoreEnabled = false;
 				StatusMessage = "Restoring";
 				CurrentStage = "Starting Restore...";
@@ -164,7 +197,9 @@ namespace ViewModels
 
 				await ApplyImageAsync(SelectedWimFilePath, SelectedWimIndex);
 
-				await _wimImageService.AddDriverPacksToAppliedWindowsAsync();
+				await _wimImageService.AddDriverPacksToAppliedWindowsAsync(
+					driverPackSelection.DriverPackPaths,
+					cancellationToken: _applyImageCancellationTokenSource.Token);
 
 				Process process = new Process();
 				process.StartInfo.FileName = @"W:\Windows\System32\bcdboot.exe";
@@ -189,6 +224,123 @@ namespace ViewModels
 				OverallProgress = 100;
 				Environment.Exit(0);
 			}
+		}
+
+		private async void RefreshDriverPacksClickHandler()
+		{
+			try
+			{
+				await RefreshDriverPackSelectionAsync();
+			}
+			catch (Exception ex)
+			{
+				AddLog("ERROR", "Driver-pack preflight failed: " + ex.Message, 0);
+				DriverPackStatus = "Driver-pack scan failed.";
+				DriverPackDetails = ex.Message;
+			}
+		}
+
+		private async Task<DriverPackSelection> RefreshDriverPackSelectionAsync()
+		{
+			RestoreEnabled = false;
+			DriverPackStatus = "Scanning attached media for matching driver packs...";
+			DriverPackDetails = "Reading the target computer model and package support metadata.";
+			CurrentStage = "Driver-pack preflight";
+			IsStageProgressIndeterminate = true;
+
+			List<String> discoveryLog = new List<String>();
+
+			try
+			{
+				DriverPackSelection selection = await Task.Run(() =>
+					DriverPackHelper.DiscoverDriverPacksOnMountedDrives(
+						message => discoveryLog.Add(message)));
+
+				foreach (String message in discoveryLog)
+				{
+					AddLog("INFO", message, 8);
+				}
+
+				UpdateDriverPackStatus(selection);
+
+				return selection;
+			}
+			finally
+			{
+				IsStageProgressIndeterminate = false;
+				StageProgress = 0;
+				CurrentStage = "Waiting";
+				RestoreEnabled = true;
+			}
+		}
+
+		private void UpdateDriverPackStatus(DriverPackSelection selection)
+		{
+			String hardwareDescription =
+				(String.IsNullOrWhiteSpace(selection.Manufacturer)
+					? "Unknown manufacturer"
+					: selection.Manufacturer) +
+				" / " +
+				(String.IsNullOrWhiteSpace(selection.Model)
+					? "Unknown model"
+					: selection.Model);
+
+			if (!selection.HasDriverPacks)
+			{
+				DriverPackStatus = "No matching driver pack found.";
+				DriverPackDetails = hardwareDescription +
+					"\nNo driver pack will be installed unless matching media is added and the scan is refreshed.";
+				AddLog("WARN", "No matching driver pack found for " + hardwareDescription + ".", 0);
+				return;
+			}
+
+			DriverPackStatus = selection.DriverPackPaths.Count == 1
+				? "1 matching driver pack will be installed."
+				: selection.DriverPackPaths.Count + " matching driver packs will be installed.";
+			DriverPackDetails = hardwareDescription + "\n" +
+				String.Join(
+					Environment.NewLine,
+					selection.DriverPackPaths.Select(path => "• " + Path.GetFileName(path)));
+		}
+
+		private Boolean ConfirmDriverPackSelection(DriverPackSelection selection)
+		{
+			String hardwareDescription = selection.Manufacturer + " " + selection.Model;
+			String message;
+			MessageBoxImage image;
+
+			if (selection.HasDriverPacks)
+			{
+				message =
+					"Detected computer: " + hardwareDescription.Trim() + "\n\n" +
+					"The following driver pack" +
+					(selection.DriverPackPaths.Count == 1 ? "" : "s") +
+					" will be installed:\n\n" +
+					String.Join(
+						Environment.NewLine,
+						selection.DriverPackPaths.Select(path => "• " + Path.GetFileName(path))) +
+					"\n\nContinue with the Windows restore?";
+				image = MessageBoxImage.Information;
+			}
+			else
+			{
+				message =
+					"No matching driver pack was found for " + hardwareDescription.Trim() + ".\n\n" +
+					"You can cancel now, add the missing pack to the DriverPacks folder, and refresh the scan. " +
+					"If you continue, Windows will be restored without an offline device-specific driver pack.\n\n" +
+					"Continue without a driver pack?";
+				image = MessageBoxImage.Warning;
+			}
+
+			MessageBoxResult result = MessageBox.Show(
+				Application.Current.MainWindow,
+				message,
+				"Confirm driver-pack selection",
+				MessageBoxButton.OKCancel,
+				image,
+				MessageBoxResult.Cancel);
+
+			return result == MessageBoxResult.OK;
 		}
 
 		private CancellationTokenSource _applyImageCancellationTokenSource;
@@ -309,9 +461,20 @@ namespace ViewModels
 			process.StartInfo.UseShellExecute = true;
 			process.Start();
 		}
-		private void WindowLoadedCommandHandler()
+		private async void WindowLoadedCommandHandler()
 		{
 			PromptForWim();
+
+			try
+			{
+				await RefreshDriverPackSelectionAsync();
+			}
+			catch (Exception ex)
+			{
+				AddLog("ERROR", "Driver-pack preflight failed: " + ex.Message, 0);
+				DriverPackStatus = "Driver-pack scan failed.";
+				DriverPackDetails = ex.Message;
+			}
 		}
 
 		private void CancelClickHandler()
@@ -328,6 +491,7 @@ namespace ViewModels
 			{
 				CurrentStage = e.OperationName;
 				StageProgress = 0;
+				IsStageProgressIndeterminate = false;
 
 				AddLog("ERROR",	$"{e.OperationName} - {e.Exception.ToString()}");
 			});
@@ -339,6 +503,7 @@ namespace ViewModels
 			{
 				CurrentStage = e.OperationName;
 				StageProgress = 100;
+				IsStageProgressIndeterminate = false;
 
 				AddLog("SUCCESS", $"{e.OperationName} 100%");
 			});
@@ -357,11 +522,28 @@ namespace ViewModels
 			Application.Current.Dispatcher.Invoke(delegate
 			{
 				Int32 percentage = Convert.ToInt32(e.Percentage);
-				OverallProgress = 40 + (percentage / 2);
+				Boolean isDriverOperation =
+					e.OperationName.Contains("driver", StringComparison.OrdinalIgnoreCase);
+
+				if (isDriverOperation)
+				{
+					OverallProgress = 75 + Convert.ToInt32(percentage * 0.15);
+				}
+				else if (e.OperationName.Equals("Apply image", StringComparison.OrdinalIgnoreCase))
+				{
+					OverallProgress = 20 + Convert.ToInt32(percentage * 0.55);
+				}
 
 				CurrentStage = e.OperationName;
 				StageProgress = percentage;
-				ProgressText = e.OperationName + " " + percentage + "%";
+				IsStageProgressIndeterminate =
+					e.OperationName.StartsWith("Installing ", StringComparison.OrdinalIgnoreCase);
+				ProgressText = e.OperationName;
+
+				if (!IsStageProgressIndeterminate)
+				{
+					ProgressText += " " + percentage + "%";
+				}
 
 				if (e.SecondsRemaining > 0)
 				{
@@ -446,6 +628,45 @@ namespace ViewModels
 				{
 					_stageProgress = value;
 					NotifyPropertyChanged(nameof(StageProgress));
+				}
+			}
+		}
+
+		public Boolean IsStageProgressIndeterminate
+		{
+			get { return _isStageProgressIndeterminate; }
+			set
+			{
+				if (_isStageProgressIndeterminate != value)
+				{
+					_isStageProgressIndeterminate = value;
+					NotifyPropertyChanged(nameof(IsStageProgressIndeterminate));
+				}
+			}
+		}
+
+		public String DriverPackStatus
+		{
+			get { return _driverPackStatus; }
+			set
+			{
+				if (_driverPackStatus != value)
+				{
+					_driverPackStatus = value;
+					NotifyPropertyChanged(nameof(DriverPackStatus));
+				}
+			}
+		}
+
+		public String DriverPackDetails
+		{
+			get { return _driverPackDetails; }
+			set
+			{
+				if (_driverPackDetails != value)
+				{
+					_driverPackDetails = value;
+					NotifyPropertyChanged(nameof(DriverPackDetails));
 				}
 			}
 		}

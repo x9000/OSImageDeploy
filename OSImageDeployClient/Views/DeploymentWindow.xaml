@@ -56,6 +56,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -67,18 +68,33 @@
                     </StackPanel>
                     <TextBlock Text="{Binding MachineName}" DockPanel.Dock="Right" FontSize="14" Foreground="#6B7280" VerticalAlignment="Top" HorizontalAlignment="Right"/>
                 </DockPanel>
+                <!-- Driver-pack preflight -->
+                <Border Grid.Row="1" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,20">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Driver-pack preflight" FontSize="14" FontWeight="SemiBold" Foreground="#1E3A8A"/>
+                            <TextBlock Text="{Binding DriverPackStatus}" FontSize="14" FontWeight="SemiBold" Foreground="#111827" Margin="0,6,0,0"/>
+                            <TextBlock Text="{Binding DriverPackDetails}" FontSize="13" Foreground="#4B5563" TextWrapping="Wrap" Margin="0,4,16,0"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Refresh driver packs" Command="{Binding RefreshDriverPacksCommand}" IsEnabled="{Binding RestoreEnabled}" VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
                 <!-- Progress -->
-                <StackPanel Grid.Row="1">
+                <StackPanel Grid.Row="2">
                     <TextBlock Text="Overall Progress" FontSize="14" FontWeight="SemiBold" Foreground="#374151"/>
                     <ProgressBar Minimum="0" Maximum="100" Value="{Binding OverallProgress}"/>
                     <DockPanel>
                         <TextBlock Text="Current Stage" FontSize="14" FontWeight="SemiBold" Foreground="#374151"/>
                         <TextBlock Text="{Binding CurrentStage}" DockPanel.Dock="Right" FontSize="14" Foreground="#2563EB" FontWeight="SemiBold" Margin="5,0,0,0"/>
                     </DockPanel>
-                    <ProgressBar Minimum="0" Maximum="100" Value="{Binding StageProgress}"/>
+                    <ProgressBar Minimum="0" Maximum="100" Value="{Binding StageProgress}" IsIndeterminate="{Binding IsStageProgressIndeterminate}"/>
                 </StackPanel>
                 <!-- Log / Details -->
-                <Grid Grid.Row="2" Margin="0,8,0,24">
+                <Grid Grid.Row="3" Margin="0,8,0,24">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -110,7 +126,7 @@
                     </Border>
                 </Grid>
                 <!-- Footer Actions -->
-                <DockPanel Grid.Row="3">
+                <DockPanel Grid.Row="4">
                     <TextBlock Text="{Binding ProgressText}" Foreground="#6B7280" FontSize="13" VerticalAlignment="Center" DockPanel.Dock="Left"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                         <Button Content="Command Line" Background="#4B5563" Command="{Binding CommandLineCommand, Mode=OneWay}"/>
