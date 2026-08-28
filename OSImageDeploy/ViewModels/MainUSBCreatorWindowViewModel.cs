@@ -30,9 +30,6 @@ namespace ViewModels
 			CreateUSBCommand =
 				new RelayCommand<UsbTargetDescriptor>(
 					execute: CreateUSBClickHandler);
-			RefreshUSBMediaCommand =
-				new RelayCommand<UsbTargetDescriptor>(
-					execute: RefreshUSBMediaClickHandler);
 			CancelUSBCommand =
 				new RelayCommand(execute: CancelUSBClickHandler);
 			ExitCommand = new RelayCommand(execute: ExitCommandHandler, canExecute: ExitCanExecuteHandler);
@@ -88,7 +85,6 @@ namespace ViewModels
 		#region Commands
 
 		public RelayCommand<UsbTargetDescriptor> CreateUSBCommand { get; }
-		public RelayCommand<UsbTargetDescriptor> RefreshUSBMediaCommand { get; }
 		public RelayCommand CancelUSBCommand { get; }
 		public RelayCommand ExitCommand { get; }
 		public RelayCommand RefreshUSBButtonCommand { get; }
@@ -762,22 +758,11 @@ namespace ViewModels
 		private async void CreateUSBClickHandler(
 			UsbTargetDescriptor selectedTarget)
 		{
-			await StartUsbMediaOperationAsync(
-				selectedTarget,
-				UsbMediaBuildMode.FullRebuild);
-		}
-
-		private async void RefreshUSBMediaClickHandler(
-			UsbTargetDescriptor selectedTarget)
-		{
-			await StartUsbMediaOperationAsync(
-				selectedTarget,
-				UsbMediaBuildMode.RefreshBootPartition);
+			await StartUsbMediaOperationAsync(selectedTarget);
 		}
 
 		private async Task StartUsbMediaOperationAsync(
-			UsbTargetDescriptor selectedTarget,
-			UsbMediaBuildMode buildMode)
+			UsbTargetDescriptor selectedTarget)
 		{
 			if (selectedTarget == null ||
 				String.IsNullOrWhiteSpace(selectedTarget.TargetId))
@@ -796,53 +781,43 @@ namespace ViewModels
 					selectedDriverPackages.Select(
 						package => package.Package.DisplayName));
 
-			UsbMediaRefreshValidationResult refreshValidation = null;
+			InfoTextBlockText =
+				"Checking whether the existing USB layout can be preserved safely...";
 
-			if (buildMode == UsbMediaBuildMode.RefreshBootPartition)
+			UsbMediaRefreshValidationResult refreshValidation;
+
+			try
 			{
-				InfoTextBlockText =
-					"Checking whether the existing USB layout can be refreshed safely...";
-
-				try
-				{
-					refreshValidation =
-						await _serviceClient.ValidateUsbMediaRefreshAsync(
-							selectedTarget);
-				}
-				catch (Exception exception)
-				{
-					HandleUsbOperationFailure(
-						"USB refresh validation failed.",
-						exception,
-						statusMayBeLost: false);
-					return;
-				}
-
-				if (!refreshValidation.IsEligible ||
-					refreshValidation.BootPartition == null ||
-					refreshValidation.DataPartition == null)
-				{
-					InfoTextBlockText = "The selected USB cannot be refreshed in place.";
-					MessageBox.Show(
-						refreshValidation.Summary +
-						Environment.NewLine +
-						Environment.NewLine +
-						"No partition has been formatted. Use the full rebuild option if you want to recreate this disk.",
-						"USB Refresh Not Available",
-						MessageBoxButton.OK,
-						MessageBoxImage.Information);
-					return;
-				}
+				refreshValidation =
+					await _serviceClient.ValidateUsbMediaRefreshAsync(
+						selectedTarget);
 			}
+			catch (Exception exception)
+			{
+				HandleUsbOperationFailure(
+					"USB layout validation failed. No disk operation was started.",
+					exception,
+					statusMayBeLost: false);
+				return;
+			}
+
+			Boolean canPreserveBuildData =
+				refreshValidation.IsEligible &&
+				refreshValidation.BootPartition != null &&
+				refreshValidation.DataPartition != null;
+			UsbMediaBuildMode buildMode = canPreserveBuildData
+				? UsbMediaBuildMode.RefreshBootPartition
+				: UsbMediaBuildMode.FullRebuild;
 
 			String confirmationMessage;
 			String confirmationTitle;
 
 			if (buildMode == UsbMediaBuildMode.RefreshBootPartition)
 			{
-				confirmationTitle = "Confirm USB Boot Partition Refresh";
+				confirmationTitle = "Confirm USB Media Update";
 				confirmationMessage =
-					"Only the existing FAT32 WinPE boot partition on this device will be formatted:" +
+					"The existing disk layout is compatible, so BuildData will be preserved. " +
+					"Only the FAT32 WinPE boot partition on this device will be formatted:" +
 					Environment.NewLine +
 					Environment.NewLine +
 					selectedTarget.DisplayName +
@@ -860,12 +835,17 @@ namespace ViewModels
 					"The DriverPacks, WindowsImages and other files on BuildData will be left in place." +
 					Environment.NewLine +
 					Environment.NewLine +
-					"Continue with the boot partition refresh?";
+					"Continue with USB media creation?";
 			}
 			else
 			{
 				confirmationTitle = "Confirm Destructive USB Operation";
 				confirmationMessage =
+					"The existing disk layout cannot be preserved safely:" +
+					Environment.NewLine +
+					refreshValidation.Summary +
+					Environment.NewLine +
+					Environment.NewLine +
 					$"All existing data on the following device will be permanently erased:" +
 					Environment.NewLine +
 					Environment.NewLine +
@@ -888,6 +868,9 @@ namespace ViewModels
 
 			if (confirmation != MessageBoxResult.Yes)
 			{
+				InfoTextBlockText =
+					"USB media creation was cancelled. No disk operation was started.";
+				SubInfoTextBlockText = String.Empty;
 				return;
 			}
 

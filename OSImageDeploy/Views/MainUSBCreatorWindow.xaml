@@ -207,7 +207,7 @@
                     <Border Style="{StaticResource CardStyle}">
                         <StackPanel>
                             <TextBlock Text="1. Select the target device" Style="{StaticResource SectionTitleStyle}"/>
-                            <TextBlock Text="Only USB devices accepted by the service safety checks are shown. The selected disk is rediscovered and revalidated before erasure."
+                            <TextBlock Text="Only USB devices accepted by the service safety checks are shown. The selected disk is rediscovered and revalidated before any formatting."
                                        Style="{StaticResource HelpTextStyle}" Margin="0,6,0,16"/>
                             <ComboBox x:Name="USBListComboBox"
                                       ItemsSource="{Binding ListOfUSBDrives}"
@@ -224,26 +224,17 @@
 
                     <Border Style="{StaticResource CardStyle}" Margin="0,18,0,0">
                         <StackPanel>
-                            <TextBlock Text="2. Create or refresh deployment media" Style="{StaticResource SectionTitleStyle}"/>
-                            <TextBlock Text="A refresh formats only a compatible WinPE boot partition and preserves BuildData. A full rebuild erases the entire selected disk. Both operations revalidate the physical target before formatting."
+                            <TextBlock Text="2. Create deployment media" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="The existing BuildData partition is preserved automatically when the disk layout is compatible. Otherwise the app clearly confirms that a full rebuild will erase the selected disk. The physical target is always rediscovered and revalidated before formatting."
                                        Style="{StaticResource HelpTextStyle}" Margin="0,6,0,16"/>
-                            <Button IsEnabled="{Binding CreateUSBButtonEnabled}"
-                                    Command="{Binding RefreshUSBMediaCommand, Mode=OneWay}"
-                                    CommandParameter="{Binding SelectedItem, ElementName=USBListComboBox}">
-                                <StackPanel>
-                                    <TextBlock Text="Refresh boot partition" TextAlignment="Center"/>
-                                    <TextBlock Text="Preserves the BuildData partition" FontSize="11" FontWeight="Normal" TextAlignment="Center" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </Button>
                             <Button x:Name="CreateUSBButton"
                                     Style="{StaticResource DangerButtonStyle}"
-                                    Margin="0,10,0,0"
                                     IsEnabled="{Binding CreateUSBButtonEnabled}"
                                     Command="{Binding CreateUSBCommand, Mode=OneWay}"
                                     CommandParameter="{Binding SelectedItem, ElementName=USBListComboBox}">
                                 <StackPanel>
-                                    <TextBlock Text="Create bootable USB" TextAlignment="Center"/>
-                                    <TextBlock Text="Erases the selected disk" FontSize="11" FontWeight="Normal" TextAlignment="Center" Margin="0,2,0,0"/>
+                                    <TextBlock Text="Create deployment media" TextAlignment="Center"/>
+                                    <TextBlock Text="Preserves BuildData when compatible" FontSize="11" FontWeight="Normal" TextAlignment="Center" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>
