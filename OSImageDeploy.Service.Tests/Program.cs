@@ -7,6 +7,7 @@ using OSImageDeploy.Platform.Windows;
 using OSImageDeploy.Transport.Grpc;
 using OSImageDeploy.Transport.Grpc.V1;
 using Utilities;
+using Imaging;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
@@ -48,6 +49,71 @@ Assert(roundTrip.IsClustered == original.IsClustered, "IsClustered changed.");
 Assert(roundTrip.HealthStatus == original.HealthStatus, "HealthStatus changed.");
 
 Console.WriteLine("PASS: USB target gRPC contract round trip.");
+
+String appliedDriverPackTestDirectory = Path.Combine(
+	Path.GetTempPath(),
+	"OSImageDeploy.AppliedDriverPack.Tests",
+	Guid.NewGuid().ToString("N"));
+
+try
+{
+	Directory.CreateDirectory(appliedDriverPackTestDirectory);
+	String matchingArchive = Path.Combine(
+		appliedDriverPackTestDirectory,
+		"HP-EliteDesk-800-G3.zip");
+	String unrelatedArchive = Path.Combine(
+		appliedDriverPackTestDirectory,
+		"HP-EliteBook-840-G9.zip");
+
+	using (ZipArchive archive = ZipFile.Open(matchingArchive, ZipArchiveMode.Create))
+	{
+	}
+
+	using (ZipArchive archive = ZipFile.Open(unrelatedArchive, ZipArchiveMode.Create))
+	{
+	}
+
+	File.WriteAllText(
+		Path.ChangeExtension(matchingArchive, ".txt"),
+		"HP EliteDesk 800 G3");
+	File.WriteAllText(
+		Path.ChangeExtension(unrelatedArchive, ".txt"),
+		"HP EliteBook 840 G9");
+
+	DriverPackSelection appliedDriverPackSelection =
+		DriverPackHelper.DiscoverDriverPacks(
+			new[]
+			{
+				appliedDriverPackTestDirectory,
+				appliedDriverPackTestDirectory
+			},
+			"HP",
+			"EliteDesk 800 G3");
+
+	Assert(
+		appliedDriverPackSelection.DriverPackPaths.Count == 1,
+		"Applied-Windows driver preflight did not select exactly one matching package.");
+	Assert(
+		appliedDriverPackSelection.DriverPackPaths[0] == matchingArchive,
+		"Applied-Windows driver preflight selected the wrong package.");
+
+	String[] unknownModelMatches = DriverPackHelper.GetValidDriverPacks(
+		appliedDriverPackTestDirectory,
+		"HP",
+		String.Empty);
+	Assert(
+		unknownModelMatches.Length == 0,
+		"An unidentified computer model matched a driver package.");
+
+	Console.WriteLine("PASS: Applied-Windows driver-pack preflight selection.");
+}
+finally
+{
+	if (Directory.Exists(appliedDriverPackTestDirectory))
+	{
+		Directory.Delete(appliedDriverPackTestDirectory, recursive: true);
+	}
+}
 
 UsbMediaOperationSnapshot operationSnapshot =
 	new UsbMediaOperationSnapshot

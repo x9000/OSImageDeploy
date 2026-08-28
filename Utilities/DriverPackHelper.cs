@@ -11,12 +11,101 @@ namespace Imaging
 
 	public static class DriverPackHelper
 	{
-		public static String[] GetValidDriverPacks(String rootFolder, Action<String> log = null)
+		public static DriverPackSelection DiscoverDriverPacksOnMountedDrives(
+			Action<String> log = null)
 		{
 			Action<String> logger = log ?? delegate { };
+			String manufacturerName =
+				GetWmiValue("Win32_ComputerSystem", "Manufacturer");
+			String modelName = GetWmiValue("Win32_ComputerSystem", "Model");
+			List<String> driverPackRoots = new List<String>();
 
-			String manufacturerName = GetWmiValue("Win32_ComputerSystem", "Manufacturer").ToUpperInvariant();
-			String modelName = GetWmiValue("Win32_ComputerSystem", "Model").ToUpperInvariant();
+			foreach (DriveInfo drive in DriveInfo.GetDrives())
+			{
+				if (!drive.IsReady ||
+					drive.DriveType != DriveType.Fixed &&
+					drive.DriveType != DriveType.Removable)
+				{
+					continue;
+				}
+
+				String driverPacksRoot = Path.Combine(
+					drive.RootDirectory.FullName,
+					"DriverPacks");
+
+				if (Directory.Exists(driverPacksRoot))
+				{
+					driverPackRoots.Add(driverPacksRoot);
+				}
+			}
+
+			return DiscoverDriverPacks(
+				driverPackRoots,
+				manufacturerName,
+				modelName,
+				logger);
+		}
+
+		public static DriverPackSelection DiscoverDriverPacks(
+			IEnumerable<String> driverPackRoots,
+			String manufacturerName,
+			String modelName,
+			Action<String> log = null)
+		{
+			ArgumentNullException.ThrowIfNull(driverPackRoots);
+
+			Action<String> logger = log ?? delegate { };
+			String manufacturer = manufacturerName?.Trim() ?? String.Empty;
+			String model = modelName?.Trim() ?? String.Empty;
+			List<String> driverPacks = new List<String>();
+
+			foreach (String driverPackRoot in driverPackRoots
+				.Where(root => !String.IsNullOrWhiteSpace(root))
+				.Distinct(StringComparer.OrdinalIgnoreCase))
+			{
+				if (!Directory.Exists(driverPackRoot))
+				{
+					continue;
+				}
+
+				logger("DriverPacks folder found: " + driverPackRoot);
+				driverPacks.AddRange(
+					GetValidDriverPacks(
+						driverPackRoot,
+						manufacturer,
+						model,
+						logger));
+			}
+
+			return new DriverPackSelection(
+				manufacturer,
+				model,
+				driverPacks
+					.Distinct(StringComparer.OrdinalIgnoreCase)
+					.OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
+					.ToArray());
+		}
+
+		public static String[] GetValidDriverPacks(String rootFolder, Action<String> log = null)
+		{
+			return GetValidDriverPacks(
+				rootFolder,
+				GetWmiValue("Win32_ComputerSystem", "Manufacturer"),
+				GetWmiValue("Win32_ComputerSystem", "Model"),
+				log);
+		}
+
+		public static String[] GetValidDriverPacks(
+			String rootFolder,
+			String manufacturerName,
+			String modelName,
+			Action<String> log = null)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(rootFolder);
+
+			Action<String> logger = log ?? delegate { };
+			manufacturerName = (manufacturerName ?? String.Empty).ToUpperInvariant();
+			modelName = (modelName ?? String.Empty).ToUpperInvariant();
 
 			logger("Manufacturer: " + manufacturerName);
 			logger("Model: " + modelName);
@@ -24,6 +113,12 @@ namespace Imaging
 			modelName = NormalizeModelName(manufacturerName, modelName);
 
 			logger("Normalized model: " + modelName);
+
+			if (String.IsNullOrWhiteSpace(modelName))
+			{
+				logger("The computer model could not be identified. No driver pack will be selected automatically.");
+				return Array.Empty<String>();
+			}
 
 			List<String> returnValue = new List<String>();
 			String[] driverPacks = Directory.GetFiles(rootFolder, "*.zip", SearchOption.AllDirectories);
@@ -213,5 +308,23 @@ namespace Imaging
 
 			return String.Empty;
 		}
+	}
+
+	public sealed class DriverPackSelection
+	{
+		public DriverPackSelection(
+			String manufacturer,
+			String model,
+			IReadOnlyList<String> driverPackPaths)
+		{
+			Manufacturer = manufacturer ?? String.Empty;
+			Model = model ?? String.Empty;
+			DriverPackPaths = driverPackPaths ?? Array.Empty<String>();
+		}
+
+		public String Manufacturer { get; }
+		public String Model { get; }
+		public IReadOnlyList<String> DriverPackPaths { get; }
+		public Boolean HasDriverPacks => DriverPackPaths.Count > 0;
 	}
 }
