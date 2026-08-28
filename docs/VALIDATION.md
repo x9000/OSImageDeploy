@@ -5,6 +5,65 @@ the automated test suite. Each result applies only to the identified artifact,
 hardware, and configuration; it is not a claim of compatibility with every
 device or peripheral.
 
+## 2026-08-28 — 1.97.1220 signed installed-product validation
+
+### Candidate identity
+
+- Commit: `73ca40f` (`main`)
+- Installer: `OSImageDeploySuite.msi`
+- Installer size: 163,438,592 bytes
+- Installer SHA-256:
+  `0C0076017F6B5C439A519993E5F0EDCACBE0972AB9B97A4C597A5AFDC523AC5D`
+- Authenticode status: Valid, with a Sectigo RFC 3161 timestamp
+- Signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`
+
+### Automated and signed-artifact validation
+
+- The complete solution and WiX installer built in Release configuration with
+  zero warnings and zero errors.
+- The Engine test suite passed 23 of 23 tests, and the available service,
+  contract, platform, and installer checks passed.
+- GitHub CI passed for the complete-payload-signing change before it was merged.
+- Microsoft MsiVal2 ICE validation completed without findings.
+- Repository verification confirmed valid timestamped signatures on the MSI
+  and every project-owned executable and library in the desktop, service, and
+  WinPE client payloads. This includes shared assemblies copied into publish
+  output rather than only each project's primary executable.
+
+### Installed-product validation
+
+The signed MSI was installed through the elevated Windows Installer path. The
+repository's full installed-product validator then ran from a normal
+Medium-integrity process and passed:
+
+- Installed Apps registration reported version `1.97.1220`.
+- The Windows service was Running, Automatic, and LocalSystem, with the
+  expected installed executable path and two 120-second restart recovery
+  actions followed by a one-day failure-count reset.
+- Every project-owned installed executable and library retained a valid
+  timestamped signature.
+- The installed payload contained no retired embedded Dell or HP WinPE driver
+  archives.
+- Live named-pipe status, WinPE cache, external driver-package catalog,
+  operation-status, and read-only USB enumeration calls passed.
+- Both full-rebuild and boot-partition-refresh calls correctly rejected
+  unconfirmed destructive requests.
+- The installed desktop UI opened directly from Medium integrity, displayed a
+  responsive main window, and closed normally.
+
+Read-only discovery found one eligible USB target and no target whose current
+layout qualified for boot-partition-only refresh. No destructive USB operation
+was requested or performed during this validation.
+
+### Validation boundaries
+
+This exact `1.97.1220` artifact has not yet undergone a destructive USB build
+or refresh, VMware Workstation boot test, or physical-machine boot test. The
+successful Dell, HP, VMware, and physical deployment results recorded below
+apply to their identified earlier candidates and are not attributed to this
+artifact.
+
 ## 2026-08-25 — 1.94.1526 HP WinPE 3.40 preparation validation
 
 ### Candidate identity
