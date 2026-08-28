@@ -1,9 +1,12 @@
 # USB boot partition refresh
 
-OSImageDeploy can refresh boot media on a USB disk that was previously created
-by the application without formatting its `BuildData` partition. This is useful
-when the WinPE client or optional WinPE drivers have changed but the Windows
-images and device driver packs on the data partition should be retained.
+OSImageDeploy automatically refreshes boot media on a USB disk that was
+previously created by the application when its layout passes the preservation
+rules below. It does not present a separate refresh action: the normal media
+creation action checks the layout first and preserves `BuildData` whenever that
+is safe. This is useful when the WinPE client or optional WinPE drivers have
+changed but the Windows images and device driver packs on the data partition
+should be retained.
 
 Refresh remains a destructive operation: the FAT32 `WinPE` partition is
 formatted. It therefore requires the same explicit operator confirmation,
@@ -24,8 +27,10 @@ The service permits an in-place refresh only when all of the following are true:
 - the `BuildData` partition contains both `DriverPacks` and `WindowsImages`.
 
 An unexpected partition, label, filesystem, missing folder, unavailable drive
-letter, or other ambiguous state rejects refresh. The operator can then leave
-the disk unchanged or deliberately choose a separately confirmed full rebuild.
+letter, or other ambiguous state rejects preservation. The confirmation dialog
+then explains that the existing layout cannot be preserved and offers the
+normal, separately confirmed full rebuild. Cancelling that confirmation leaves
+the disk unchanged.
 
 ## Operation ordering
 
