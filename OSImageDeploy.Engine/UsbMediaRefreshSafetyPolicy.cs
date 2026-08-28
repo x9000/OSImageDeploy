@@ -6,6 +6,11 @@ namespace OSImageDeploy.Engine
 	{
 		public const UInt64 MinimumBootPartitionSizeBytes =
 			4UL * 1024 * 1024 * 1024;
+		public const UInt64 MaximumMicrosoftReservedPartitionSizeBytes =
+			128UL * 1024 * 1024;
+
+		private static readonly Guid MicrosoftReservedPartitionType =
+			new Guid("E3C9E316-0B5C-4DB8-817D-F92DF00215AE");
 
 		public static UsbMediaRefreshValidationResult Validate(
 			UsbMediaLayoutDescriptor layout)
@@ -22,21 +27,52 @@ namespace OSImageDeploy.Engine
 				errors.Add("The disk is not partitioned using GPT.");
 			}
 
-			if (layout.Partitions.Count != 2)
+			List<UsbMediaPartitionDescriptor> reservedPartitions =
+				layout.Partitions
+					.Where(IsMicrosoftReservedPartition)
+					.ToList();
+			List<UsbMediaPartitionDescriptor> contentPartitions =
+				layout.Partitions
+					.Where(partition => !IsMicrosoftReservedPartition(partition))
+					.ToList();
+
+			if (contentPartitions.Count != 2)
 			{
 				errors.Add(
-					"Refresh requires exactly the two partitions created by OSImageDeploy.");
+					"Refresh requires exactly the WinPE and BuildData partitions, plus at most one Microsoft Reserved partition.");
+			}
+
+			if (reservedPartitions.Count > 1)
+			{
+				errors.Add(
+					"More than one Microsoft Reserved partition was found.");
+			}
+
+			foreach (UsbMediaPartitionDescriptor reservedPartition in
+				reservedPartitions)
+			{
+				if (!reservedPartition.IsHidden ||
+					!String.IsNullOrWhiteSpace(reservedPartition.DriveLetter) ||
+					!String.IsNullOrWhiteSpace(reservedPartition.FileSystem) ||
+					!String.IsNullOrWhiteSpace(reservedPartition.Label) ||
+					reservedPartition.SizeBytes == 0 ||
+					reservedPartition.SizeBytes >
+						MaximumMicrosoftReservedPartitionSizeBytes)
+				{
+					errors.Add(
+						"The Microsoft Reserved partition has unexpected attributes.");
+				}
 			}
 
 			List<UsbMediaPartitionDescriptor> bootCandidates =
-				layout.Partitions
+				contentPartitions
 					.Where(partition => String.Equals(
 						partition.Label,
 						"WinPE",
 						StringComparison.OrdinalIgnoreCase))
 					.ToList();
 			List<UsbMediaPartitionDescriptor> dataCandidates =
-				layout.Partitions
+				contentPartitions
 					.Where(partition => String.Equals(
 						partition.Label,
 						"BuildData",
@@ -118,15 +154,32 @@ namespace OSImageDeploy.Engine
 					"The 'WinPE' partition is not positioned before the 'BuildData' partition.");
 			}
 
+			if (bootPartition != null &&
+				reservedPartitions.Any(partition =>
+					partition.PartitionNumber >= bootPartition.PartitionNumber))
+			{
+				errors.Add(
+					"The Microsoft Reserved partition is not positioned before the 'WinPE' partition.");
+			}
+
 			return new UsbMediaRefreshValidationResult
 			{
 				IsEligible = errors.Count == 0,
 				Summary = errors.Count == 0
-					? "The existing OSImageDeploy layout can be refreshed without formatting the BuildData partition."
+					? reservedPartitions.Count == 0
+						? "The existing OSImageDeploy layout can be refreshed without formatting the BuildData partition."
+						: "The existing OSImageDeploy layout, including its Microsoft Reserved partition, can be retained while the WinPE partition is refreshed."
 					: String.Join(" ", errors),
 				BootPartition = bootPartition,
 				DataPartition = dataPartition
 			};
+		}
+
+		private static Boolean IsMicrosoftReservedPartition(
+			UsbMediaPartitionDescriptor partition)
+		{
+			return Guid.TryParse(partition.GptType, out Guid gptType) &&
+				gptType == MicrosoftReservedPartitionType;
 		}
 	}
 }
