@@ -62,10 +62,12 @@ been inspected.
 ## Data protection boundary
 
 Refresh deliberately does not format, resize, or recreate `BuildData`, and does
-not delete or rewrite its `DriverPacks`, `WindowsImages`, or other content.
-Nevertheless, important source images should have another copy: power loss,
-failing hardware, firmware faults, and operating-system storage errors can
-affect any attached disk operation.
+not delete or rewrite its `DriverPacks`, Windows images, or other existing
+content. If `WindowsImages\OSImageDeploy.json` is missing, refresh adds the
+manual-by-default configuration template; an existing configuration is never
+overwritten. Nevertheless, important source images should have another copy:
+power loss, failing hardware, firmware faults, and operating-system storage
+errors can affect any attached disk operation.
 
 Automated policy and contract tests do not prove preserved-data behavior on real
 media. Release validation for this feature should separately record an

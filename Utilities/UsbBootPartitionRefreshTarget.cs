@@ -9,5 +9,7 @@ namespace Utilities
 		public UInt64 SizeBytes { get; init; }
 
 		public String DriveLetter { get; init; } = String.Empty;
+
+		public String DataDriveLetter { get; init; } = String.Empty;
 	}
 }

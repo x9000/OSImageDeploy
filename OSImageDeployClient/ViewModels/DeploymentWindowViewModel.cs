@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using System.Xml.Linq;
 using x9000.Utilities;
 using static x9000.Utilities.FSManager;
 
@@ -24,6 +25,8 @@ namespace ViewModels
 		private Boolean _isStageProgressIndeterminate;
 		private String _driverPackStatus;
 		private String _driverPackDetails;
+		private Boolean _isAutomaticDeployment;
+		private Boolean _restoreInProgress;
 		#region "Relay Commands"
 		public RelayCommand StartRestoreCommand { get; }
 		public RelayCommand RefreshDriverPacksCommand { get; }
@@ -59,37 +62,29 @@ namespace ViewModels
 
 
 
-		private void PromptForWim()
+		private Boolean PromptForWim()
 		{
-			String WimDirRoot = "";
-			foreach (DriveInfo drive in DriveInfo.GetDrives())
-			{
-				AddLog("INFO", $"Drive {drive.Name} is {drive.DriveType.ToString()}", 0);
-				if (!drive.IsReady)
-				{
-					continue;
-				}
+			String wimDirectoryRoot = FindWindowsImagesDirectory();
 
-				if (Directory.Exists(System.IO.Path.Combine(drive.RootDirectory.FullName, "WindowsImages")))
-				{
-					WimDirRoot = System.IO.Path.Combine(drive.RootDirectory.FullName, "WindowsImages");
-				}
+			if (String.IsNullOrWhiteSpace(wimDirectoryRoot))
+			{
+				AddLog("ERROR", "No WindowsImages folder was found on attached deployment media.", 0);
+				StatusMessage = "No Windows image folder was found.";
+				StartButtonText = "Select Image";
+				return false;
 			}
-			AddLog("INFO", $"WIM Directory is {WimDirRoot}", 0);
+
+			AddLog("INFO", $"WIM Directory is {wimDirectoryRoot}", 0);
 			WimSelectionWindow wimSelectionWindow = new WimSelectionWindow
 			{
 				Owner = Application.Current.MainWindow
 			};
 
-			foreach(String wimFilePath in Directory.GetFiles(WimDirRoot, "*.wim"))
+			foreach(String wimFilePath in Directory.GetFiles(wimDirectoryRoot, "*.wim"))
 			{
 				wimSelectionWindow.WimSelectionVM.AvailableWimFiles.Add(wimFilePath);
 			}
-			//if (Directory.GetFiles(WimDirRoot, "*.wim").Length == 1)
-			//{
 
-			//	wimSelectionWindow.WimSelectionVM.SelectedWimFilePath = Directory.GetFiles(WimDirRoot, "*.wim")[0];
-			//}
 			Boolean? result = wimSelectionWindow.ShowDialog();
 			if (result == true && wimSelectionWindow.WimSelectionVM.SelectedImage != null)
 			{
@@ -97,11 +92,38 @@ namespace ViewModels
 				SelectedWimFilePath = wimSelectionWindow.WimSelectionVM.SelectedWimFilePath;
 				SelectedWimIndex = wimSelectionWindow.WimSelectionVM.SelectedImage.Index;
 				StartButtonText = "Start Restore";
+				return true;
 			}
-			else
+
+			StartButtonText = "Select Image";
+			return false;
+		}
+
+		private String FindWindowsImagesDirectory()
+		{
+			String wimDirectoryRoot = String.Empty;
+
+			foreach (DriveInfo drive in DriveInfo.GetDrives())
 			{
-				StartButtonText = "Select Image";
+				AddLog("INFO", $"Drive {drive.Name} is {drive.DriveType.ToString()}", 0);
+				if (!drive.IsReady ||
+					drive.DriveType != DriveType.Fixed &&
+						drive.DriveType != DriveType.Removable)
+				{
+					continue;
+				}
+
+				String candidateDirectory = Path.Combine(
+					drive.RootDirectory.FullName,
+					"WindowsImages");
+
+				if (Directory.Exists(candidateDirectory))
+				{
+					wimDirectoryRoot = candidateDirectory;
+				}
 			}
+
+			return wimDirectoryRoot;
 		}
 
 		private String _SelectedWimFilePath;
@@ -150,28 +172,34 @@ namespace ViewModels
 
 		private async void StartRestoreClickHandler()
 		{
-			// Check SecureBoot status = ((Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecureBoot\State).UEFISecureBootEnabled -eq 1)
-			// Apply image to Windows partition.
-			// Prepare Recovery Environment on Recovery partition. 	
-			//				New-Item -Path R:\Recovery\WindowsRE -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
-			//				Copy - Item - Path W:\Windows\System32\Recovery\Winre.wim - Destination R:\Recovery\WindowsRE\
-			// Find Driver Packs on USB drive and apply to image.
-			//
+			await StartRestoreAsync();
+		}
+
+		private async Task StartRestoreAsync()
+		{
+			if (_restoreInProgress)
+			{
+				return;
+			}
+
 			if (SelectedWimIndex == 0)
 			{
 				PromptForWim();
+				return;
 			}
-			else
-			{
-				DriverPackSelection driverPackSelection;
 
-				try
+			DriverPackSelection driverPackSelection;
+
+			try
+			{
+				driverPackSelection = await RefreshDriverPackSelectionAsync();
+			}
+			catch (Exception ex)
+			{
+				AddLog("ERROR", "Driver-pack preflight failed: " + ex.Message, 0);
+
+				if (!_isAutomaticDeployment)
 				{
-					driverPackSelection = await RefreshDriverPackSelectionAsync();
-				}
-				catch (Exception ex)
-				{
-					AddLog("ERROR", "Driver-pack preflight failed: " + ex.Message, 0);
 					MessageBox.Show(
 						Application.Current.MainWindow,
 						"The driver-pack preflight could not be completed. No changes have been made to the target disk.\n\n" +
@@ -179,50 +207,125 @@ namespace ViewModels
 						"Driver-pack preflight failed",
 						MessageBoxButton.OK,
 						MessageBoxImage.Error);
-					return;
 				}
 
-				if (!ConfirmDriverPackSelection(driverPackSelection))
-				{
-					StatusMessage = "Restore cancelled before target-disk preparation.";
-					CurrentStage = "Waiting";
-					ProgressText = "Add or replace driver packs, then refresh the preflight before trying again.";
-					return;
-				}
+				return;
+			}
 
-				RestoreEnabled = false;
-				StatusMessage = "Restoring";
-				CurrentStage = "Starting Restore...";
+			_restoreInProgress = true;
+			RestoreEnabled = false;
+			StatusMessage = _isAutomaticDeployment
+				? "Automatic Windows deployment is running."
+				: "Restoring";
+			CurrentStage = "Starting Restore...";
+			_applyImageCancellationTokenSource.Dispose();
+			_applyImageCancellationTokenSource = new CancellationTokenSource();
+
+			try
+			{
 				await CreateDiskLayoutAsync();
-
 				await ApplyImageAsync(SelectedWimFilePath, SelectedWimIndex);
-
 				await _wimImageService.AddDriverPacksToAppliedWindowsAsync(
 					driverPackSelection.DriverPackPaths,
 					cancellationToken: _applyImageCancellationTokenSource.Token);
 
-				Process process = new Process();
-				process.StartInfo.FileName = @"W:\Windows\System32\bcdboot.exe";
-				process.StartInfo.Arguments = @"W:\Windows /s S:";
-				process.Start();
-				process.WaitForExit();
+				RunProcessAndRequireSuccess(
+					@"W:\Windows\System32\bcdboot.exe",
+					@"W:\Windows /s S:",
+					"Configuring Windows boot files");
 
 				Directory.CreateDirectory(@"R:\Recovery\WindowsRE");
-				File.Copy(@"W:\Windows\System32\Recovery\Winre.wim", @"R:\Recovery\Winre.wim");
-				process = new Process();
-				process.StartInfo.FileName = @"cmd.exe";
-				process.StartInfo.Arguments = @"/C W:\Windows\System32\Reagentc.exe /setreimage /path R:\Recovery\Winre.wim /target W:\Windows";
-				process.Start();
-				process.WaitForExit();
+				File.Copy(
+					@"W:\Windows\System32\Recovery\Winre.wim",
+					@"R:\Recovery\Winre.wim",
+					overwrite: true);
+				RunProcessAndRequireSuccess(
+					@"W:\Windows\System32\Reagentc.exe",
+					@"/setreimage /path R:\Recovery\Winre.wim /target W:\Windows",
+					"Configuring the Windows recovery image");
 				String windowsBCDGuid = Utilities.BCDHelper.GetWindowsGUID();
-				process = new Process();
-				process.StartInfo.FileName = @"cmd.exe";
-				process.StartInfo.Arguments = @"/C W:\Windows\System32\Reagentc.exe /enable /osguid " + windowsBCDGuid;
-				process.Start();
-				process.WaitForExit();
+				RunProcessAndRequireSuccess(
+					@"W:\Windows\System32\Reagentc.exe",
+					@"/enable /osguid " + windowsBCDGuid,
+					"Enabling the Windows recovery environment");
 				FSManager.RemoveDriveLetter('R');
 				OverallProgress = 100;
+				StatusMessage = "Windows deployment completed successfully.";
+				CurrentStage = _isAutomaticDeployment ? "Rebooting" : "Complete";
+				AddLog("SUCCESS", "Windows deployment completed successfully.", 0);
+
+				if (_isAutomaticDeployment)
+				{
+					ProgressText = "Automatic deployment completed. Rebooting now.";
+					RunProcessAndRequireSuccess(
+						"wpeutil.exe",
+						"Reboot",
+						"Rebooting after automatic deployment",
+						waitForExit: false);
+					return;
+				}
+
 				Environment.Exit(0);
+			}
+			catch (OperationCanceledException)
+			{
+				StatusMessage = "Windows deployment was cancelled.";
+				CurrentStage = "Cancelled";
+				ProgressText = "Deployment did not complete.";
+				AddLog("WARN", "Windows deployment was cancelled.", 0);
+			}
+			catch (Exception ex)
+			{
+				StatusMessage = "Windows deployment failed.";
+				CurrentStage = "Failed";
+				ProgressText = ex.Message;
+				AddLog("ERROR", ex.ToString(), 0);
+			}
+			finally
+			{
+				_restoreInProgress = false;
+
+				if (OverallProgress < 100)
+				{
+					RestoreEnabled = true;
+				}
+			}
+		}
+
+		private static void RunProcessAndRequireSuccess(
+			String fileName,
+			String arguments,
+			String operationName,
+			Boolean waitForExit = true)
+		{
+			using Process process = new Process
+			{
+				StartInfo = new ProcessStartInfo
+				{
+					FileName = fileName,
+					Arguments = arguments,
+					UseShellExecute = false,
+					CreateNoWindow = true
+				}
+			};
+
+			if (!process.Start())
+			{
+				throw new InvalidOperationException(
+					operationName + " could not be started.");
+			}
+
+			if (!waitForExit)
+			{
+				return;
+			}
+
+			process.WaitForExit();
+
+			if (process.ExitCode != 0)
+			{
+				throw new InvalidOperationException(
+					operationName + " failed with exit code " + process.ExitCode + ".");
 			}
 		}
 
@@ -303,62 +406,29 @@ namespace ViewModels
 					selection.DriverPackPaths.Select(path => "• " + Path.GetFileName(path)));
 		}
 
-		private Boolean ConfirmDriverPackSelection(DriverPackSelection selection)
-		{
-			String hardwareDescription = selection.Manufacturer + " " + selection.Model;
-			String message;
-			MessageBoxImage image;
-
-			if (selection.HasDriverPacks)
-			{
-				message =
-					"Detected computer: " + hardwareDescription.Trim() + "\n\n" +
-					"The following driver pack" +
-					(selection.DriverPackPaths.Count == 1 ? "" : "s") +
-					" will be installed:\n\n" +
-					String.Join(
-						Environment.NewLine,
-						selection.DriverPackPaths.Select(path => "• " + Path.GetFileName(path))) +
-					"\n\nContinue with the Windows restore?";
-				image = MessageBoxImage.Information;
-			}
-			else
-			{
-				message =
-					"No matching driver pack was found for " + hardwareDescription.Trim() + ".\n\n" +
-					"You can cancel now, add the missing pack to the DriverPacks folder, and refresh the scan. " +
-					"If you continue, Windows will be restored without an offline device-specific driver pack.\n\n" +
-					"Continue without a driver pack?";
-				image = MessageBoxImage.Warning;
-			}
-
-			MessageBoxResult result = MessageBox.Show(
-				Application.Current.MainWindow,
-				message,
-				"Confirm driver-pack selection",
-				MessageBoxButton.OKCancel,
-				image,
-				MessageBoxResult.Cancel);
-
-			return result == MessageBoxResult.OK;
-		}
-
 		private CancellationTokenSource _applyImageCancellationTokenSource;
 
 		public async Task ApplyImageAsync(String selectedWimFile,int selectedImageIndex)
 		{
 			if (!File.Exists(selectedWimFile))
 			{
-				AddLog("ERROR", "WIM file does not exist: " + selectedWimFile, 0);
-				return;
+				throw new FileNotFoundException(
+					"The selected WIM file does not exist.",
+					selectedWimFile);
 			}
 
 			FileInfo fileInfo = new FileInfo(selectedWimFile);
 
 			if (fileInfo.Length == 0)
 			{
-				AddLog("ERROR", "WIM file is empty: " + selectedWimFile, 0);
-				return;
+				throw new InvalidDataException(
+					"The selected WIM file is empty: " + selectedWimFile);
+			}
+
+			if (selectedImageIndex <= 0)
+			{
+				throw new InvalidDataException(
+					"The selected WIM image index must be positive.");
 			}
 
 			AddLog("INFO", "WIM file: " + selectedWimFile, 0);
@@ -381,21 +451,14 @@ namespace ViewModels
 			//}
 			Directory.CreateDirectory(@"W:\Windows\Temp");
 
-			try
-			{
-				CurrentStage = "Applying Windows image";
-				await _wimImageService.ApplyImageAsync(
-					wimPath: selectedWimFile,
-					imageIndex: selectedImageIndex,
-					targetPath: @"W:\",
-					cancellationToken: _applyImageCancellationTokenSource.Token);
+			CurrentStage = "Applying Windows image";
+			await _wimImageService.ApplyImageAsync(
+				wimPath: selectedWimFile,
+				imageIndex: selectedImageIndex,
+				targetPath: @"W:\",
+				cancellationToken: _applyImageCancellationTokenSource.Token);
 
-				AddLog("SUCCESS", "Image applied successfully.");
-			}
-			catch (Exception ex)
-			{
-				AddLog("ERROR", ex.ToString(), 0);
-			}
+			AddLog("SUCCESS", "Image applied successfully.");
 		}
 
 		public void CancelApplyWindowsImage()
@@ -442,8 +505,8 @@ namespace ViewModels
 
 			if (!result)
 			{
-				AddLog("ERROR", "Disk layout creation failed.", 0);
-				return;
+				throw new InvalidOperationException(
+					"Disk layout creation failed.");
 			}
 
 			AddLog("SUCCESS", "Disk layout creation completed.", 0);
@@ -463,6 +526,52 @@ namespace ViewModels
 		}
 		private async void WindowLoadedCommandHandler()
 		{
+			AutomaticDeploymentPlan automaticPlan = null;
+
+			try
+			{
+				automaticPlan = await Task.Run(() =>
+					AutomaticDeploymentConfigurationFile.DiscoverOnMountedDrives(
+						message => Application.Current.Dispatcher.Invoke(() =>
+							AddLog("INFO", message, 0))));
+			}
+			catch (Exception ex)
+			{
+				AddLog("ERROR", "Automatic deployment preflight failed: " + ex.Message, 0);
+				StatusMessage = "Automatic deployment was not started.";
+				ProgressText = ex.Message;
+			}
+
+			if (automaticPlan != null)
+			{
+				try
+				{
+					await ValidateAutomaticWimSelectionAsync(automaticPlan);
+					_isAutomaticDeployment = true;
+					SelectedWimFilePath = automaticPlan.WimFilePath;
+					SelectedWimIndex = automaticPlan.WimIndex;
+					StartButtonText = "Automatic Restore";
+					StatusMessage = "Automatic deployment preflight passed.";
+					AddLog(
+						"INFO",
+						"Automatic deployment selected " +
+							Path.GetFileName(automaticPlan.WimFilePath) +
+							" index " + automaticPlan.WimIndex + ".",
+						0);
+					await StartRestoreAsync();
+					return;
+				}
+				catch (Exception ex)
+				{
+					_isAutomaticDeployment = false;
+					SelectedWimFilePath = String.Empty;
+					SelectedWimIndex = 0;
+					AddLog("ERROR", "Automatic deployment preflight failed: " + ex.Message, 0);
+					StatusMessage = "Automatic deployment was not started.";
+					ProgressText = ex.Message;
+				}
+			}
+
 			PromptForWim();
 
 			try
@@ -477,8 +586,53 @@ namespace ViewModels
 			}
 		}
 
+		private async Task ValidateAutomaticWimSelectionAsync(
+			AutomaticDeploymentPlan plan)
+		{
+			ArgumentNullException.ThrowIfNull(plan);
+
+			CurrentStage = "Validating automatic image";
+			IsStageProgressIndeterminate = true;
+			ProgressText = "Reading configured WIM metadata before Disk 0 is changed.";
+
+			try
+			{
+				XDocument document = await _wimImageService.GetWimInfoAsync(
+					plan.WimFilePath,
+					_applyImageCancellationTokenSource.Token);
+				Boolean indexExists = document
+					.Descendants("IMAGE")
+					.Select(element => element.Attribute("INDEX")?.Value)
+					.Any(value =>
+						Int32.TryParse(value, out Int32 index) &&
+						index == plan.WimIndex);
+
+				if (!indexExists)
+				{
+					throw new InvalidDataException(
+						"The configured WimIndex does not exist in " +
+							Path.GetFileName(plan.WimFilePath) + ".");
+				}
+			}
+			finally
+			{
+				IsStageProgressIndeterminate = false;
+				StageProgress = 0;
+				CurrentStage = "Waiting";
+			}
+		}
+
 		private void CancelClickHandler()
 		{
+			if (_restoreInProgress)
+			{
+				StatusMessage = "Cancellation requested.";
+				ProgressText = "Waiting for the current deployment step to stop safely.";
+				CancelDiskLayout();
+				CancelApplyWindowsImage();
+				return;
+			}
+
 			Environment.Exit(0);
 		}
 		#endregion

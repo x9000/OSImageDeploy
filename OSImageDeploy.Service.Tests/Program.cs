@@ -171,6 +171,94 @@ finally
 	}
 }
 
+String automaticDeploymentTestDirectory = Path.Combine(
+	Path.GetTempPath(),
+	"OSImageDeploy.AutomaticDeployment.Tests",
+	Guid.NewGuid().ToString("N"));
+
+try
+{
+	String windowsImagesDirectory = Path.Combine(
+		automaticDeploymentTestDirectory,
+		"WindowsImages");
+	String configurationPath =
+		AutomaticDeploymentConfigurationFile.EnsureDefaultFile(
+			windowsImagesDirectory);
+	String defaultConfiguration = File.ReadAllText(configurationPath);
+
+	Assert(
+		AutomaticDeploymentConfigurationFile.Load(configurationPath) == null,
+		"The generated deployment configuration did not default to manual mode.");
+	Assert(
+		defaultConfiguration.Contains(
+			"REPLACE-WITH-YOUR-WIM-FILE.wim",
+			StringComparison.Ordinal),
+		"The generated deployment configuration did not highlight the WIM file setting.");
+	Assert(
+		defaultConfiguration.Contains(
+			"\"WimIndex\": 0",
+			StringComparison.Ordinal),
+		"The generated deployment configuration did not highlight the WIM index setting.");
+
+	AutomaticDeploymentConfigurationFile.EnsureDefaultFile(
+		windowsImagesDirectory);
+	Assert(
+		File.ReadAllText(configurationPath) == defaultConfiguration,
+		"Creating the default configuration overwrote the existing file.");
+
+	String wimPath = Path.Combine(windowsImagesDirectory, "Windows11.wim");
+	File.WriteAllText(wimPath, "test WIM payload");
+	File.WriteAllText(
+		configurationPath,
+		"""
+		{
+			"AutomaticDeployment": true,
+			"WimFileName": "Windows11.wim",
+			"WimIndex": 6
+		}
+		""");
+
+	AutomaticDeploymentPlan? plan =
+		AutomaticDeploymentConfigurationFile.Load(configurationPath);
+	Assert(plan != null, "The enabled automatic deployment plan was not loaded.");
+	Assert(plan!.WimFilePath == wimPath, "The automatic WIM path changed.");
+	Assert(plan.WimIndex == 6, "The automatic WIM index changed.");
+
+	File.WriteAllText(
+		configurationPath,
+		"""
+		{
+			"AutomaticDeployment": true,
+			"WimFileName": "..\\Windows11.wim",
+			"WimIndex": 6
+		}
+		""");
+
+	Boolean traversalRejected = false;
+
+	try
+	{
+		AutomaticDeploymentConfigurationFile.Load(configurationPath);
+	}
+	catch (InvalidDataException)
+	{
+		traversalRejected = true;
+	}
+
+	Assert(
+		traversalRejected,
+		"A WIM path outside the WindowsImages folder was accepted.");
+
+	Console.WriteLine("PASS: Automatic deployment configuration guards.");
+}
+finally
+{
+	if (Directory.Exists(automaticDeploymentTestDirectory))
+	{
+		Directory.Delete(automaticDeploymentTestDirectory, recursive: true);
+	}
+}
+
 UsbMediaOperationSnapshot operationSnapshot =
 	new UsbMediaOperationSnapshot
 	{

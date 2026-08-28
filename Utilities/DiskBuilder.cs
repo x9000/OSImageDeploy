@@ -321,6 +321,12 @@ namespace Utilities
 					buildResult.MediaFolder,
 					$"{currentDriveLetter}:\\");
 
+				if (!String.IsNullOrWhiteSpace(refreshTarget.DataDriveLetter))
+				{
+					AutomaticDeploymentConfigurationFile.EnsureDefaultFile(
+						$"{refreshTarget.DataDriveLetter}:\\WindowsImages");
+				}
+
 				OnPhaseProgress(
 					DiskBuildPhase.CopyingBootMedia,
 					"WinPE environment copied. Existing BuildData content was preserved.",
@@ -476,7 +482,11 @@ namespace Utilities
 
 				String dataPartitionDriveLetter = Convert.ToString(dataPartition.CimInstanceProperties["DriveLetter"].Value) ?? "";
 				Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\DriverPacks");
-				Directory.CreateDirectory($"{dataPartitionDriveLetter}:\\WindowsImages");
+				String windowsImagesDirectory =
+					$"{dataPartitionDriveLetter}:\\WindowsImages";
+				Directory.CreateDirectory(windowsImagesDirectory);
+				AutomaticDeploymentConfigurationFile.EnsureDefaultFile(
+					windowsImagesDirectory);
 
 				OnPhaseProgress(DiskBuildPhase.CopyingBootMedia, "Copying WinPE environment to the USB drive.",	0);
 				cancellationToken.ThrowIfCancellationRequested();
