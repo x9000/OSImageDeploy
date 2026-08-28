@@ -34,7 +34,17 @@ $resolvedInstallerPath =
 $filesToVerify = @(
 	$resolvedInstallerPath
 	(Join-Path $PublishRoot 'Main\OSImageDeploy.exe')
+	(Join-Path $PublishRoot 'Main\OSImageDeploy.dll')
+	(Join-Path $PublishRoot 'Main\MVVMLibrary.dll')
+	(Join-Path $PublishRoot 'Main\OSImageDeploy.Client.dll')
+	(Join-Path $PublishRoot 'Main\OSImageDeploy.Contracts.dll')
+	(Join-Path $PublishRoot 'Main\OSImageDeploy.Engine.dll')
+	(Join-Path $PublishRoot 'Main\OSImageDeploy.Transport.Grpc.dll')
+	(Join-Path $PublishRoot 'Main\Utilities.dll')
 	(Join-Path $PublishRoot 'WinPeClient\OSImageDeployClient.exe')
+	(Join-Path $PublishRoot 'WinPeClient\OSImageDeployClient.dll')
+	(Join-Path $PublishRoot 'WinPeClient\MVVMLibrary.dll')
+	(Join-Path $PublishRoot 'WinPeClient\Utilities.dll')
 	(Join-Path $PublishRoot 'Service\OSImageDeploy.Contracts.dll')
 	(Join-Path $PublishRoot 'Service\OSImageDeploy.Engine.dll')
 	(Join-Path $PublishRoot 'Service\OSImageDeploy.Platform.Windows.dll')
@@ -43,6 +53,9 @@ $filesToVerify = @(
 	(Join-Path $PublishRoot 'Service\OSImageDeploy.Transport.Grpc.dll')
 	(Join-Path $PublishRoot 'Service\Utilities.dll')
 	(Join-Path $PublishRoot 'Service\WinPEClient\OSImageDeployClient.exe')
+	(Join-Path $PublishRoot 'Service\WinPEClient\OSImageDeployClient.dll')
+	(Join-Path $PublishRoot 'Service\WinPEClient\MVVMLibrary.dll')
+	(Join-Path $PublishRoot 'Service\WinPEClient\Utilities.dll')
 )
 
 foreach ($filePath in $filesToVerify)
