@@ -229,6 +229,27 @@ $installedFiles = @(
 	(Join-Path $resolvedInstallDirectory 'Service\WinPEClient\Utilities.dll')
 )
 
+$installedNoticeFiles = @(
+	(Join-Path $resolvedInstallDirectory 'SOURCE-LICENSE.txt'),
+	(Join-Path $resolvedInstallDirectory 'THIRD-PARTY-NOTICES.txt'),
+	(Join-Path $resolvedInstallDirectory 'ThirdPartyLicenses\Apache-2.0.txt'),
+	(Join-Path $resolvedInstallDirectory 'ThirdPartyLicenses\BSD-3-Clause.txt'),
+	(Join-Path $resolvedInstallDirectory 'ThirdPartyLicenses\dotnet-LICENSE.txt'),
+	(Join-Path $resolvedInstallDirectory 'ThirdPartyLicenses\dotnet-THIRD-PARTY-NOTICES.txt'),
+	(Join-Path $resolvedInstallDirectory 'ThirdPartyLicenses\Microsoft-Reciprocal-License.txt'),
+	(Join-Path $resolvedInstallDirectory 'ThirdPartyLicenses\MIT.txt'),
+	(Join-Path $resolvedInstallDirectory 'ThirdPartyLicenses\WiX-OSMFEULA.txt')
+)
+
+foreach ($installedNoticeFile in $installedNoticeFiles)
+{
+	Assert-Condition `
+		(Test-Path -LiteralPath $installedNoticeFile -PathType Leaf) `
+		"Required installed notice file is missing: $installedNoticeFile"
+}
+
+Write-Host 'PASS: Installed source licence and third-party notices are present.'
+
 foreach ($installedFile in $installedFiles)
 {
 	Test-ProjectSignature -Path $installedFile -ExpectedThumbprint $normalizedThumbprint

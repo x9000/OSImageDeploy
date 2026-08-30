@@ -1,0 +1,109 @@
+OSIMAGEDEPLOY SOURCE-VISIBLE LICENCE 1.0
+
+Copyright (c) 2026 x9000.com Consulting Services Limited.
+All rights reserved.
+
+1. Purpose
+
+OSImageDeploy is proprietary software whose source code is made available for
+inspection, evaluation, security review, and the submission of suggestions.
+Making the source code visible does not make the software open source and does
+not grant a general right to use, copy, modify, or distribute it.
+
+2. Limited permission
+
+Subject to this licence, x9000.com Consulting Services Limited (the Owner)
+grants you a personal, revocable, non-exclusive, non-transferable permission
+to:
+
+a. view and study the source code;
+b. download, clone, and retain reasonable copies solely for private evaluation,
+   compatibility assessment, or good-faith security research;
+c. create a fork using facilities supplied by the repository hosting service,
+   solely for those same private purposes; and
+d. compile and run an unmodified copy solely in a private, non-production test
+   environment for evaluation or good-faith security research.
+
+No other rights are granted, whether expressly, by implication, estoppel, or
+otherwise.
+
+3. Restrictions
+
+Unless the Owner gives you prior written permission, you must not:
+
+a. use the source code or a build made from it in production, as part of a
+   service, or for any revenue-generating activity;
+b. publish, redistribute, sell, rent, sublicense, or otherwise make the source
+   code, compiled software, or any substantial part of either available to
+   another person, except for a fork expressly permitted by section 2;
+c. modify, adapt, translate, or create derivative works from the source code;
+d. incorporate the source code, its design, or any substantial part of it into
+   another product or project;
+e. remove or obscure copyright, licence, attribution, safety, or branding
+   notices;
+f. use the software or source code to gain unauthorised access, damage or
+   disrupt systems or data, invade privacy, infringe another person's rights,
+   spread malware, or cause deliberate harm; or
+g. use the Owner's names, logos, product names, domain names, or other marks in
+   a way that suggests endorsement, sponsorship, or affiliation.
+
+The permission to create a repository-hosted fork exists only to the extent
+needed for the purposes in section 2. It does not grant permission to publish
+releases, distribute builds, or operate a competing or derived project.
+
+4. Suggestions and contributions
+
+You may submit feature ideas, bug reports, documentation comments, and security
+reports through the channels described in the repository. The project does not
+accept unsolicited source-code contributions or pull requests unless the Owner
+has agreed otherwise in writing before the contribution is submitted.
+
+By submitting a suggestion, you give the Owner a perpetual, worldwide,
+royalty-free permission to consider, discuss, use, and implement the suggestion
+without an obligation to compensate or credit you. You keep ownership of any
+original material you submit.
+
+5. Official binary releases
+
+Official binary releases published by the Owner are licensed separately under
+the end-user licence presented by the installer. This source-visible licence
+does not expand the rights granted for official binaries, and the binary
+end-user licence does not expand the rights granted for source code.
+
+6. Third-party software
+
+Third-party components remain subject to their own licences. Nothing in this
+licence limits rights granted directly by those third-party licences. Relevant
+notices are listed in THIRD-PARTY-NOTICES.txt.
+
+7. No warranty
+
+The source code is provided "as is" and "as available", without warranties of
+any kind. To the fullest extent permitted by law, the Owner disclaims all
+express and implied warranties, including merchantability, fitness for a
+particular purpose, non-infringement, accuracy, and security.
+
+8. Limitation of liability
+
+To the fullest extent permitted by law, the Owner and its people will not be
+liable for indirect or consequential loss, loss of profit, loss of business,
+loss of data, or other loss arising from access to or use of the source code.
+Nothing in this licence excludes or limits liability where doing so would be
+unlawful, including liability for death or personal injury caused by
+negligence, fraud, or fraudulent misrepresentation.
+
+9. Termination
+
+This licence terminates automatically if you breach it. On termination, you
+must stop using the source code and delete copies in your possession or
+control, except where the repository hosting service does not permit you to
+delete a platform-managed record immediately.
+
+10. General
+
+If part of this licence is found unenforceable, the remaining terms continue in
+effect. A delay in enforcing a right does not waive it. This licence is governed
+by the laws of England and Wales, and the courts of England and Wales have
+exclusive jurisdiction.
+
+Questions and permission requests may be directed through https://x9000.com.

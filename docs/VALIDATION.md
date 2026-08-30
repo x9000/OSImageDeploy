@@ -5,6 +5,46 @@ the automated test suite. Each result applies only to the identified artifact,
 hardware, and configuration; it is not a claim of compatibility with every
 device or peripheral.
 
+Stable device identities are used during destructive-operation validation but
+are redacted from this public-facing record after the result has been
+established.
+
+## 2026-08-30 — 1.97.1624 automatic deployment and BuildData validation
+
+### Candidate identity and validation boundary
+
+- Source commit: `b0f36a96a4ba1edd812e57739b4b8b891c914423` (`main`).
+- Installed Apps version: `1.97.1624`.
+- The installed service was Running and Automatic.
+- The tested installation was an unsigned development release. This result is
+  not a signed production-release claim.
+- GitHub CI passed for the automatic-deployment pull request and merged commit.
+
+### End-to-end installed-product validation
+
+The installed product successfully created deployment media while preserving
+the existing compatible `BuildData` volume. The generated manual-by-default
+`WindowsImages\OSImageDeploy.json` file was edited to select a Windows image and
+index, and the opt-in automatic deployment path selected and applied that image
+without presenting the normal WIM-selection dialog.
+
+The resulting media completed full Windows rebuilds in each of these distinct
+environments:
+
+- a Dell laptop, including the applicable device driver pack;
+- a VMware Workstation virtual machine; and
+- an HP EliteDesk 800 G3 Mini PC, including the applicable device driver pack.
+
+The operator reported successful Windows deployment, automatic image
+selection, preserved `BuildData` content, detected driver-pack application, and
+normal post-deployment operation in all three environments. No further product
+defect was observed during this testing.
+
+This is user-confirmed installed-product, VMware, and physical-hardware
+validation of the identified unsigned candidate. A signed release candidate
+still requires its own artifact, signature, MSI, installed-product, and release
+promotion checks.
+
 ## 2026-08-28 — 1.97.1405 NVMe USB refresh validation
 
 ### Candidate identity
@@ -25,7 +65,7 @@ enclosure. Windows reported it as a healthy, online, writable
 1,000,204,886,016-byte USB disk and as neither the system disk nor the boot
 disk. Its stable raw identity was:
 
-`USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\01293800008D&0:KEPLER`
+`USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\<redacted>`
 
 Windows presented this enclosure as fixed media and automatically added a
 hidden 16,759,808-byte Microsoft Reserved partition when the application
@@ -368,7 +408,7 @@ dialog:
 
 - target: Disk 3, `WDC WDS 100T1R0B-68A`, 1,000,204,886,016 bytes, USB bus;
 - stable target identity:
-  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\01293800008D&0:KEPLER`;
+  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\<redacted>`;
 - pre-operation state: GPT, Online, Healthy, writable, three partitions, and
   reported by Windows as neither the system disk nor the boot disk;
 - selected package: `Dell WinPE driver pack`, containing 70 INF files.
@@ -464,7 +504,7 @@ before proceeding.
 
 - target: Disk 3, `WDC WDS 100T1R0B-68A`, 1,000,204,886,016 bytes, USB bus;
 - stable target identity:
-  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\01293800008D&0:KEPLER`;
+  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\<redacted>`;
 - pre-operation state: GPT, Online, Healthy, writable, three partitions, and
   reported by Windows as neither the system disk nor the boot disk;
 - selected package ID: `dell-winpe`;
@@ -520,7 +560,7 @@ for this particular candidate media.
 - Result: completed successfully through the installed product.
 - Target: Disk 2, `WDC WDS 100T1R0B-68A`, 1,000,204,886,016 bytes, USB bus.
 - Stable identity used during validation:
-  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\01293800008D&0:KEPLER`.
+  `USBSTOR\DISK&VEN_WDC__WDS&PROD_100T1R0B-68A&REV_1.00\<redacted>`.
 - Pre-operation state: GPT, Online, Healthy, writable, three partitions, and
   reported by Windows as neither the system disk nor the boot disk.
 - The device-reported serial number was all zeroes, so it was not treated as a

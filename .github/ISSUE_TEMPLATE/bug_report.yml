@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible OSImageDeploy problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report vulnerabilities here. Use the private process in SECURITY.md.
+        Remove secrets, personal data, Windows images, OEM packages, and stable hardware identifiers.
+  - type: input
+    id: version
+    attributes:
+      label: OSImageDeploy version
+      placeholder: 1.97.1624
+    validations:
+      required: true
+  - type: dropdown
+    id: execution
+    attributes:
+      label: Execution context
+      options:
+        - Installed product
+        - Development build
+        - WinPE client
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the expected and actual behaviour.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Windows, ADK/WinPE, VMware or physical-hardware details as relevant, with identifiers redacted.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I have removed secrets, personal data, product keys, Windows images, OEM packages, and stable hardware identifiers.
+          required: true
+        - label: This report does not disclose a security vulnerability.
+          required: true

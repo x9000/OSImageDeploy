@@ -1,0 +1,76 @@
+OS Image Deployment Suite - Third-Party Notices
+
+OS Image Deployment Suite includes or is built using third-party software.
+Those components remain subject to their respective licences. The notices
+below are provided for attribution and do not change the proprietary licence
+for OSImageDeploy's original source code or official binaries. Complete licence
+and upstream notice files distributed with the product are installed in the
+ThirdPartyLicenses directory.
+
+.NET and Microsoft libraries
+----------------------------
+
+The self-contained application includes binary components from .NET under the
+Microsoft .NET Library terms recorded in `dotnet-LICENSE.txt`, together with
+the upstream notices in `dotnet-THIRD-PARTY-NOTICES.txt`.
+
+The application also uses the following direct Microsoft NuGet packages and
+their transitive dependencies under the licence identified by each package,
+primarily the MIT License:
+
+- Microsoft.Extensions.Configuration.UserSecrets
+- Microsoft.Extensions.Hosting.WindowsServices
+- Microsoft.Extensions.Logging.Abstractions
+- Microsoft.Management.Infrastructure
+- Microsoft.Xaml.Behaviors.Wpf
+- System.Management
+
+Copyright remains with Microsoft Corporation and the respective contributors.
+
+Source and licence information:
+https://github.com/dotnet/runtime
+https://github.com/dotnet/extensions
+https://github.com/microsoft/XamlBehaviorsWpf
+https://opensource.org/license/mit
+
+The complete MIT text used for these package notices is installed as
+`MIT.txt`.
+
+gRPC
+----
+
+The application uses Grpc.AspNetCore, Grpc.Core.Api, Grpc.Net.Client, and
+Grpc.Tools. These packages are distributed under the Apache License 2.0.
+
+Copyright 2018-2019 The gRPC Authors.
+https://github.com/grpc/grpc-dotnet
+https://github.com/grpc/grpc
+https://www.apache.org/licenses/LICENSE-2.0
+
+The complete Apache License 2.0 text is installed as `Apache-2.0.txt`.
+
+Protocol Buffers
+----------------
+
+Google.Protobuf is distributed under the BSD 3-Clause License.
+
+Copyright 2015 Google Inc.
+https://github.com/protocolbuffers/protobuf
+https://opensource.org/license/bsd-3-clause
+
+The complete BSD 3-Clause text is installed as `BSD-3-Clause.txt`.
+
+WiX Toolset
+-----------
+
+The installer is built using WiX Toolset SDK, UI, and Util packages. WiX
+Toolset source is distributed under the Microsoft Reciprocal License. Official
+binary packages also include the WiX Open Source Maintenance Fee Agreement.
+
+Copyright Outercurve Foundation and contributors.
+https://github.com/wixtoolset/wix
+https://github.com/wixtoolset/wix/blob/main/LICENSE.TXT
+https://github.com/wixtoolset/wix/blob/main/OSMFEULA.txt
+
+The corresponding complete texts are installed as
+`Microsoft-Reciprocal-License.txt` and `WiX-OSMFEULA.txt`.

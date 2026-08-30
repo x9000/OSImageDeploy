@@ -3,6 +3,9 @@
 ###############################################################################
 * text=auto
 
+# Preserve authoritative third-party licence text exactly as published.
+ThirdPartyLicenses/** whitespace=-trailing-space,-blank-at-eof
+
 ###############################################################################
 # Set default behavior for command prompt diff.
 #
