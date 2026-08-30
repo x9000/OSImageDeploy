@@ -87,6 +87,28 @@ image, or third-party driver package.
 This exact-artifact result satisfies the destructive USB, VMware, and physical
 hardware validation gates for promotion of `v1.99.1233-rc.1` to production.
 
+### Production promotion audit
+
+Production release `v1.99.1233` was promoted from the exact signed and tested
+RC1 MSI; it was not rebuilt. Immediately before promotion, the public RC1 asset
+was downloaded into a new local directory and independently verified:
+
+- file size: 163,467,264 bytes;
+- SHA-256:
+  `E5B8B6216560C670B17D1E427DA17F78E3E3009F263F7F1002195FD3F30CB5DD`;
+- Authenticode status: Valid;
+- signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`;
+- Sectigo RFC 3161 timestamp: present and valid.
+
+GitHub reports the same size and SHA-256 digest for both the RC1 and production
+release assets. The production release is public, non-draft, non-prerelease,
+and marked as the latest release. Both tags point to source commit
+`db9c52f2b642a3baa636bd48aaaa2cb1bf5891ab`; the later validation-only commits
+do not change the released binary source. The protected Windows build/package
+and C# and GitHub Actions CodeQL checks passed for the production-validation
+record before it was merged.
+
 ## 2026-08-30 — 1.97.1624 automatic deployment and BuildData validation
 
 ### Candidate identity and validation boundary
