@@ -68,6 +68,25 @@ HP deployment and VMware boot results recorded for `1.97.1624` therefore remain
 strong workflow evidence, but they are not attributed to this exact signed
 `1.99.1233` artifact.
 
+### End-to-end production-promotion validation
+
+The exact signed `v1.99.1233-rc.1` MSI identified above subsequently completed
+full Windows rebuilds in three distinct environments:
+
+- a Dell laptop on physical hardware;
+- a VMware Workstation virtual machine; and
+- an HP EliteDesk 800 G3 on physical hardware.
+
+The operator reported 100% success in all three environments, with no product
+defect or required remediation observed. These results validate the complete
+installed-product media-creation and Windows-deployment workflow on both tested
+physical manufacturers and the tested virtual-machine platform. They do not
+claim compatibility with every model, firmware revision, peripheral, Windows
+image, or third-party driver package.
+
+This exact-artifact result satisfies the destructive USB, VMware, and physical
+hardware validation gates for promotion of `v1.99.1233-rc.1` to production.
+
 ## 2026-08-30 — 1.97.1624 automatic deployment and BuildData validation
 
 ### Candidate identity and validation boundary
