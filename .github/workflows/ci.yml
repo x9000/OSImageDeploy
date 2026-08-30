@@ -66,6 +66,26 @@ jobs:
         shell: pwsh
         run: ./Build/Test-WinPeDriverPackageTools.ps1
 
+      - name: Validate public repository policy files
+        shell: pwsh
+        run: |
+          $requiredFiles = @(
+            './LICENSE',
+            './SECURITY.md',
+            './CONTRIBUTING.md',
+            './SUPPORT.md',
+            './CODE_OF_CONDUCT.md',
+            './THIRD-PARTY-NOTICES.txt'
+          )
+
+          foreach ($requiredFile in $requiredFiles) {
+            if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+              throw "Required public repository policy file is missing: $requiredFile"
+            }
+          }
+
+          Write-Host 'Public repository policy files are present.'
+
       - name: Validate package tooling in Windows PowerShell 5.1
         shell: powershell
         run: .\Build\Test-WinPeDriverPackageTools.ps1

@@ -1,0 +1,30 @@
+name: Improvement suggestion
+description: Suggest a feature, workflow, or documentation improvement
+title: "[Suggestion] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggestions are welcome. This is a proprietary, maintainer-developed project and unsolicited pull requests are not accepted.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: Explain the user need rather than only the proposed implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Practical benefit
+      description: Describe who benefits and how the workflow improves.
+    validations:
+      required: true

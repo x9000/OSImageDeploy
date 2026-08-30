@@ -18,6 +18,18 @@ git rev-parse HEAD
 
 Do not build a release from a working tree containing uncommitted changes.
 
+For a public release, also confirm that:
+
+- the repository source licence and installer end-user licence describe their
+  separate scopes consistently;
+- `SOURCE-LICENSE.txt`, `THIRD-PARTY-NOTICES.txt`, and the complete
+  `ThirdPartyLicenses` directory are present in the MSI;
+- no Windows image, OEM package, product key, signing credential, stable device
+  identifier, or other private validation material is included in source,
+  Actions artifacts, or release assets; and
+- the release notes distinguish automated, signed-artifact, installed-product,
+  destructive USB, VMware, and physical-hardware validation.
+
 ## 2. Run the unsigned CI-equivalent checks
 
 OEM WinPE driver packages are operator-managed data and are not release inputs
@@ -82,6 +94,8 @@ dotnet build OSImageDeploy.Installer\OSImageDeploy.Installer.wixproj `
 
 `Test-SignedInstaller.ps1` verifies every project-owned publish payload and the
 MSI, including timestamp presence, then runs Microsoft MsiVal2 ICE validation.
+`Test-InstallerPackage.ps1` also requires the source licence and third-party
+notice files and rejects retired embedded OEM driver archives.
 
 ## 4. Install and test the release candidate
 

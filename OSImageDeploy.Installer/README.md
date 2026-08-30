@@ -34,6 +34,13 @@ The package is written to:
 OSImageDeploy.Installer\bin\Release\OSImageDeploySuite.msi
 ```
 
+The MSI installs `SOURCE-LICENSE.txt` and `THIRD-PARTY-NOTICES.txt` beside the
+desktop executable, with complete dependency terms in `ThirdPartyLicenses`.
+The source licence governs use of the visible source code; the installer's
+friendly end-user licence governs official binary releases. The package
+validator requires all installed notice files and rejects retired embedded OEM
+driver archives.
+
 ## Publish and signing behavior
 
 - The desktop application, Windows service, and WinPE client are published as

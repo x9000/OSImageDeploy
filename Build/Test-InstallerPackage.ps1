@@ -248,11 +248,56 @@ try
 		-Database $database `
 		-Query 'SELECT `FileName` FROM `File`' `
 		-FieldCount 1)
+	$fileNames = @()
+
+	foreach ($fileRow in $fileRows)
+	{
+		if ($fileRow -is [Array])
+		{
+			$fileName = $fileRow[0]
+		}
+		else
+		{
+			$fileName = [String]$fileRow
+		}
+
+		$fileNames += ($fileName -split '\|')[-1]
+	}
+
+	$requiredNoticeFiles = @(
+		'SOURCE-LICENSE.txt',
+		'THIRD-PARTY-NOTICES.txt',
+		'Apache-2.0.txt',
+		'BSD-3-Clause.txt',
+		'dotnet-LICENSE.txt',
+		'dotnet-THIRD-PARTY-NOTICES.txt',
+		'Microsoft-Reciprocal-License.txt',
+		'MIT.txt',
+		'WiX-OSMFEULA.txt')
+
+	foreach ($requiredNoticeFile in $requiredNoticeFiles)
+	{
+		$matchingNoticeFileCount = 0
+
+		foreach ($fileName in $fileNames)
+		{
+			if ($fileName -eq $requiredNoticeFile)
+			{
+				$matchingNoticeFileCount++
+			}
+		}
+
+		if ($matchingNoticeFileCount -ne 1)
+		{
+			throw "The MSI must contain exactly one '$requiredNoticeFile' file."
+		}
+	}
+
 	$legacyPayloads = @('DellPEDrivers.zip', 'HPPEDrivers.zip')
 
 	foreach ($legacyPayload in $legacyPayloads)
 	{
-		if (($fileRows | Where-Object { $_[0] -like "*$legacyPayload*" }).Count -gt 0)
+		if ($legacyPayload -in $fileNames)
 		{
 			throw "The MSI still embeds legacy OEM driver payload '$legacyPayload'."
 		}

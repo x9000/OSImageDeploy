@@ -44,6 +44,23 @@
 					Id="MainExecutable"
 					Source="!(bindpath.MainPublish)\OSImageDeploy.exe" />
 
+				<File
+					Id="SourceVisibleLicense"
+					Name="SOURCE-LICENSE.txt"
+					Source="$(sys.SOURCEFILEDIR)..\LICENSE" />
+
+				<File
+					Id="ThirdPartyNotices"
+					Name="THIRD-PARTY-NOTICES.txt"
+					Source="$(sys.SOURCEFILEDIR)..\THIRD-PARTY-NOTICES.txt" />
+
+				<Directory
+					Id="THIRDPARTYLICENSESFOLDER"
+					Name="ThirdPartyLicenses">
+
+					<Files Include="$(sys.SOURCEFILEDIR)..\ThirdPartyLicenses\*" />
+				</Directory>
+
 				<Files Include="!(bindpath.MainPublish)\**">
 					<Exclude Files="!(bindpath.MainPublish)\OSImageDeploy.exe" />
 					<Exclude Files="!(bindpath.MainPublish)\**\*.pdb" />
