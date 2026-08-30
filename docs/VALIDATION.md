@@ -9,6 +9,65 @@ Stable device identities are used during destructive-operation validation but
 are redacted from this public-facing record after the result has been
 established.
 
+## 2026-08-30 — 1.99.1233 signed release-candidate validation
+
+### Candidate identity
+
+- Source commit: `db9c52f2b642a3baa636bd48aaaa2cb1bf5891ab` (`main`).
+- Fixed build timestamp: `2026-08-30T11:33:00Z`.
+- Installer: `OSImageDeploySuite.msi`.
+- Installer size: 163,467,264 bytes.
+- Installer SHA-256:
+  `E5B8B6216560C670B17D1E427DA17F78E3E3009F263F7F1002195FD3F30CB5DD`.
+- Authenticode status: Valid, with a Sectigo RFC 3161 timestamp.
+- Signer thumbprint:
+  `F2E897E8C120F3D58CB8E8BF99F1FE56E36FC907`.
+
+### Build and package validation
+
+- The signed x64 Release MSI built from a clean Release output directory with
+  zero warnings and zero errors.
+- The repository signature validator confirmed valid timestamped signatures
+  on the MSI and all 23 project-owned executable and library payloads used by
+  the desktop application, Windows service, and WinPE client.
+- Microsoft MsiVal2 ICE validation completed without findings.
+- MSI structure validation passed, including the service configuration,
+  source licence and third-party notice payload, and rejection of retired
+  embedded Dell and HP driver archives.
+- GitHub Windows CI had already passed on the exact source commit through pull
+  request 33 before this signed artifact was built.
+
+### Installed-product validation
+
+Windows Installer upgraded the installed product from `1.97.1624` to the exact
+signed `1.99.1233` candidate with exit code `0`. A verbose upgrade log was
+retained outside the repository.
+
+The complete installed-product validator then passed from a normal
+Medium-integrity user process:
+
+- Installed Apps registration reported version `1.99.1233` and matched the
+  candidate ProductCode.
+- `OSImageDeploy.Service` was Running, Automatic, and LocalSystem, used the
+  installed service executable, and retained two delayed restart recovery
+  actions followed by a one-day failure-count reset.
+- All installed project-owned executables and libraries retained valid,
+  timestamped signatures from the expected certificate.
+- The source licence and complete third-party notices were installed, and no
+  retired embedded OEM driver archive was present.
+- Live named-pipe service status, WinPE driver-package catalog, operation
+  status, WinPE cache status, and read-only USB discovery calls passed.
+- Full-rebuild, boot-partition-refresh, and WinPE-cache-clear confirmation
+  guards rejected unconfirmed requests.
+- The installed desktop UI opened directly from Medium integrity, was
+  responsive, and closed normally.
+
+No eligible USB target was connected during this validation, and no
+destructive USB or WinPE-cache operation was requested. The physical Dell and
+HP deployment and VMware boot results recorded for `1.97.1624` therefore remain
+strong workflow evidence, but they are not attributed to this exact signed
+`1.99.1233` artifact.
+
 ## 2026-08-30 — 1.97.1624 automatic deployment and BuildData validation
 
 ### Candidate identity and validation boundary
